@@ -3,23 +3,23 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/mobile_navigation"
-    app:startDestination="@+id/nav_home">
+    app:startDestination="@+id/nav_m01_login">
 
     <fragment
-        android:id="@+id/nav_home"
-        android:name="com.pleos.mobile_app_fuelog.ui.home.HomeFragment"
-        android:label="@string/menu_home"
-        tools:layout="@layout/fragment_home" />
+        android:id="@+id/nav_m01_login"
+        android:name="com.pleos.mobile_app_fuelog.ui.auth.M01LoginFragment"
+        android:label="@string/m01_title"
+        tools:layout="@layout/fragment_m01_login" />
 
     <fragment
-        android:id="@+id/nav_gallery"
-        android:name="com.pleos.mobile_app_fuelog.ui.gallery.GalleryFragment"
-        android:label="@string/menu_gallery"
-        tools:layout="@layout/fragment_gallery" />
+        android:id="@+id/nav_m02_no_vehicle"
+        android:name="com.pleos.mobile_app_fuelog.ui.onboarding.M02NoVehicleFragment"
+        android:label="M02. 첫 차량 등록"
+        tools:layout="@layout/fragment_m02_no_vehicle" />
 
     <fragment
-        android:id="@+id/nav_slideshow"
-        android:name="com.pleos.mobile_app_fuelog.ui.slideshow.SlideshowFragment"
-        android:label="@string/menu_slideshow"
-        tools:layout="@layout/fragment_slideshow" />
+        android:id="@+id/nav_m03_vehicle_home"
+        android:name="com.pleos.mobile_app_fuelog.ui.main.M03VehicleHomeFragment"
+        android:label="M03. 내 차 대시보드"
+        tools:layout="@layout/fragment_m03_vehicle_home" />
 </navigation>

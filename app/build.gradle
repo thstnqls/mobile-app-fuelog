@@ -2,18 +2,34 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { stream ->
+        localProperties.load(stream)
+    }
+}
+def supabaseUrl = localProperties.getProperty("SUPABASE_URL", "")
+def supabaseAnonKey = localProperties.getProperty(
+        "SUPABASE_ANON_KEY",
+        localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY", "")
+)
+
 android {
     namespace 'com.pleos.mobile_app_fuelog'
     compileSdk 36
 
     defaultConfig {
         applicationId "com.pleos.mobile_app_fuelog"
-        minSdk 36
+        minSdk 26
         targetSdk 36
         versionCode 1
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField "String", "SUPABASE_URL", "\"${supabaseUrl}\""
+        buildConfigField "String", "SUPABASE_ANON_KEY", "\"${supabaseAnonKey}\""
     }
 
     buildTypes {
@@ -28,6 +44,7 @@ android {
     }
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 }
 

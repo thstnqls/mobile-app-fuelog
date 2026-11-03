@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/bottom_tab_home"
+        android:icon="@android:drawable/ic_menu_view"
+        android:title="홈" />
+    <item
+        android:id="@+id/bottom_tab_driving"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:title="운행" />
+    <item
+        android:id="@+id/bottom_tab_ledger"
+        android:icon="@android:drawable/ic_menu_agenda"
+        android:title="차계부" />
+    <item
+        android:id="@+id/bottom_tab_manage"
+        android:icon="@android:drawable/ic_menu_manage"
+        android:title="관리" />
+</menu>
