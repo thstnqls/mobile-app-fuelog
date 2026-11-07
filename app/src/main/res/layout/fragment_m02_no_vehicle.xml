@@ -12,12 +12,14 @@
         android:orientation="vertical"
         android:padding="20dp">
 
+        <!-- 1. [전용] 차량 화면(C01) QR 코드 인식 기반 차량·계정 연동 카드 -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardBackgroundColor="@color/fuelog_card_bg"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="2dp">
+            app:cardBackgroundColor="@color/fuelog_dark_badge"
+            app:cardCornerRadius="18dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -28,107 +30,82 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="M02. 첫 차량 간편 등록"
-                    android:textColor="@color/fuelog_primary"
+                    android:background="@color/fuelog_primary_dark"
+                    android:paddingStart="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="4dp"
+                    android:text="C01 · M02 QR 코드 인식 전용"
+                    android:textColor="@color/white"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="차량 디스플레이의 QR 코드를\n스캔해 차량을 연동하세요"
+                    android:textColor="@color/white"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="차량 번호와 유종만 선택하면 바로 주유 기록과 단가 매칭을 시작할 수 있습니다."
-                    android:textColor="@color/fuelog_text_secondary"
+                    android:layout_marginTop="8dp"
+                    android:lineSpacingExtra="3dp"
+                    android:text="차량 화면(C01)에 표시된 페어링 QR 코드를 카메라로 스캔하면, 백엔드 서버를 통해 차량과 내 계정이 즉시 연동됩니다."
+                    android:textColor="#B0B8C1"
                     android:textSize="13sp" />
 
                 <TextView
-                    android:id="@+id/tv_m02_session_info"
+                    android:id="@+id/tv_m02_qr_status"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
+                    android:layout_marginTop="14dp"
+                    android:background="#263040"
                     android:lineSpacingExtra="3dp"
-                    android:textColor="@color/fuelog_text_secondary"
-                    android:textSize="12sp" />
-
-                <!-- 1. 차량 번호 입력 (필수) -->
-                <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/til_m02_plate_number"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:hint="차량 번호 (예: 12가 3456 또는 123가 4567)"
-                    app:errorEnabled="true">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/et_m02_plate_number"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:imeOptions="actionDone"
-                        android:inputType="text"
-                        android:maxLines="1"
-                        android:text="58다 1024" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <!-- 2. 유종 칩 선택 (기본 휘발유) -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="유종 선택 (주유 단가·연비 단위 연동)"
-                    android:textColor="@color/fuelog_text_primary"
-                    android:textSize="13sp"
+                    android:padding="12dp"
+                    android:text="상태: 차량 화면(C01)의 QR 코드를 스캔할 준비가 되었습니다."
+                    android:textColor="#5CE1A6"
+                    android:textSize="12sp"
                     android:textStyle="bold" />
 
-                <com.google.android.material.chip.ChipGroup
-                    android:id="@+id/chip_group_fuel_type"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:checkedChip="@+id/chip_fuel_gasoline"
-                    app:selectionRequired="true"
-                    app:singleSelection="true">
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_fuel_gasoline"
-                        style="@style/Widget.MaterialComponents.Chip.Choice"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checked="true"
-                        android:text="휘발유" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_fuel_diesel"
-                        style="@style/Widget.MaterialComponents.Chip.Choice"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="경유" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_fuel_lpg"
-                        style="@style/Widget.MaterialComponents.Chip.Choice"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="LPG" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_fuel_ev"
-                        style="@style/Widget.MaterialComponents.Chip.Choice"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="전기" />
-                </com.google.android.material.chip.ChipGroup>
-
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_m02_register_vehicle"
+                    android:id="@+id/btn_m02_scan_qr_camera"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
                     android:layout_marginTop="14dp"
-                    android:text="차량 등록 완료 후 M03(차량 있음)으로 이동"
+                    android:text="카메라로 차량 QR 코드 스캔"
+                    android:textColor="@color/white"
+                    android:textSize="15sp"
                     android:textStyle="bold"
+                    app:backgroundTint="@color/fuelog_primary"
                     app:cornerRadius="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_m02_recognize_c01_qr"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="8dp"
+                    android:text="차량(C01) QR 코드 인식 · 연동"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="12dp"
+                    app:strokeColor="#5CE1A6" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            android:id="@+id/tv_m02_session_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:lineSpacingExtra="3dp"
+            android:textColor="@color/fuelog_text_secondary"
+            android:textSize="12sp" />
 
         <!-- 세션 만료 / 다른 계정 전환 검증 -->
         <LinearLayout

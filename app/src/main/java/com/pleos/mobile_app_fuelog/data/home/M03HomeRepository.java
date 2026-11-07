@@ -3,6 +3,8 @@ package com.pleos.mobile_app_fuelog.data.home;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -11,8 +13,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * M03. 홈 데이터 저장소 및 상태 조립기.
- * - 차량 선택 및 전환 시 이전 차량 데이터가 절대 섞이지 않도록 차량별 격리 조회를 수행한다.
+ * M03. 홈 데이터 저장소 및 상태 조립기 (백엔드 API / DB 연동 전용).
+ * - 앱 내부에 하드코딩된 더미 데이터베이스 없이, 백엔드 API(`GET /vehicle/home`, `GET /sync/status`, `GET /mobile/inbox` 등)에서
+ *   조회한 실제 DB 데이터와 동적 주입된 레코드만을 차량별로 격리하여 관리한다.
  * - FR-M03-1: 미완료 작업(M07 주유 확인, M04 운행 귀속, M09 정산 변경, M13 공동 관리) 제공.
  * - FR-M03-2: 본인 기록 + 명시적 공유 기록만 필터링하여 반환.
  * - FR-M03-3: 확인된 주유·정비 지출과 미확인 추정 건을 분리하고, 운행 소비 비용 중복 합산을 차단.
@@ -20,8 +23,8 @@ import java.util.Locale;
  */
 public final class M03HomeRepository {
 
-    public static final String VEHICLE_ID_PRIMARY = "veh_primary_12ga3456";
-    public static final String VEHICLE_ID_SECONDARY = "veh_secondary_88ha9012";
+    public static final String VEHICLE_ID_PRIMARY = "veh_primary_db";
+    public static final String VEHICLE_ID_SECONDARY = "veh_secondary_db";
 
     private final List<VehicleProfile> vehicles = new ArrayList<>();
     private final List<PendingTaskItem> allPendingTasks = new ArrayList<>();
@@ -36,241 +39,260 @@ public final class M03HomeRepository {
     private boolean offlineMode = false;
     private boolean newUserEmptyMode = false;
     private String lastSyncedTimestamp;
+    private double latestOdometerKm = 0.0;
 
     public M03HomeRepository() {
         updateSyncTimestampNow();
-        seedDefaultData(null);
     }
 
-    public synchronized void seedDefaultData(@Nullable String customPrimaryVehicleLabel) {
+    /**
+     * 하드코딩된 더미 데이터 없이 저장소를 비우고, 전달된 대표 차량 정보만 초기화한다.
+     */
+    public synchronized void clearAllAndInitVehicle(@Nullable String primaryVehicleId, @Nullable String customPrimaryVehicleLabel) {
         vehicles.clear();
         allPendingTasks.clear();
         allTrips.clear();
         allExpenses.clear();
         allMaintenanceItems.clear();
+        latestOdometerKm = 0.0;
 
-        String primaryDisplay = (customPrimaryVehicleLabel != null && !customPrimaryVehicleLabel.trim().isEmpty())
-                ? customPrimaryVehicleLabel.trim()
-                : "12가 3456 (휘발유)";
-
-        vehicles.add(new VehicleProfile(
-                VEHICLE_ID_PRIMARY,
-                "12가 3456",
-                "휘발유",
-                primaryDisplay,
-                true
-        ));
-        vehicles.add(new VehicleProfile(
-                VEHICLE_ID_SECONDARY,
-                "88하 9012",
-                "경유",
-                "88하 9012 (경유 · 세컨드카)",
-                false
-        ));
-
-        if (selectedVehicleId == null) {
-            selectedVehicleId = VEHICLE_ID_PRIMARY;
+        if (customPrimaryVehicleLabel != null && !customPrimaryVehicleLabel.trim().isEmpty()) {
+            String vid = (primaryVehicleId != null && !primaryVehicleId.trim().isEmpty())
+                    ? primaryVehicleId.trim()
+                    : VEHICLE_ID_PRIMARY;
+            String label = customPrimaryVehicleLabel.trim();
+            String fuelType = extractFuelTypeFromLabel(label);
+            String plate = extractPlateFromLabel(label);
+            vehicles.add(new VehicleProfile(vid, plate, fuelType, label, true));
+            selectedVehicleId = vid;
+            newUserEmptyMode = false;
+        } else {
+            selectedVehicleId = null;
         }
+    }
 
-        // === 차량 1 (VEHICLE_ID_PRIMARY) 데이터 ===
-        allPendingTasks.add(new PendingTaskItem(
-                "task_m07_1",
-                VEHICLE_ID_PRIMARY,
-                PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM,
-                "주유 결제 알림 확인 필요 (SK강남주유소)",
-                "카드 승인 68,000원 · 주유량(L) 및 단가 확정 대기",
-                68000L
-        ));
-        allPendingTasks.add(new PendingTaskItem(
-                "task_m04_1",
-                VEHICLE_ID_PRIMARY,
-                PendingTaskItem.TaskDestination.M04_TRIP_ATTRIBUTION,
-                "최근 운행 1건 목적·귀속 미지정",
-                "판교 테크노밸리 → 양재 IC (18.4km) · 개인/업무/공동 귀속 선택",
-                0L
-        ));
-        allPendingTasks.add(new PendingTaskItem(
-                "task_m09_1",
-                VEHICLE_ID_PRIMARY,
-                PendingTaskItem.TaskDestination.M09_SETTLEMENT_CHANGE,
-                "11월 공동 운행 정산 비율 변경 요청",
-                "공동 사용자(김민수) 정산 변경안 확인 대기",
-                45000L
-        ));
-        allPendingTasks.add(new PendingTaskItem(
-                "task_m13_1",
-                VEHICLE_ID_PRIMARY,
-                PendingTaskItem.TaskDestination.M13_SHARE_MANAGEMENT,
-                "차량 공동 지출 공유 범위 확인",
-                "주유·정비 영수증 자동 공유 규칙 점검",
-                0L
-        ));
+    public synchronized void registerOrUpdateVehicle(@NonNull VehicleProfile profile) {
+        for (int i = 0; i < vehicles.size(); i++) {
+            if (vehicles.get(i).getVehicleId().equals(profile.getVehicleId())) {
+                vehicles.set(i, profile);
+                if (selectedVehicleId == null) {
+                    selectedVehicleId = profile.getVehicleId();
+                }
+                return;
+            }
+        }
+        vehicles.add(profile);
+        if (selectedVehicleId == null) {
+            selectedVehicleId = profile.getVehicleId();
+        }
+    }
 
-        allTrips.add(new TripRecord(
-                "trip_1",
-                VEHICLE_ID_PRIMARY,
-                "오늘 08:40",
-                "역삼역 → 판교역 (출근 운행)",
-                16.8,
-                34,
-                "본인 기록 · 귀속 완료",
-                2100L,
-                ExpenseRecord.Ownership.MY_RECORD
-        ));
-        allTrips.add(new TripRecord(
-                "trip_2",
-                VEHICLE_ID_PRIMARY,
-                "어제 19:15",
-                "판교 테크노밸리 → 양재 IC",
-                18.4,
-                41,
-                "명시적 공유 · 귀속 확인 필요",
-                2300L,
-                ExpenseRecord.Ownership.EXPLICITLY_SHARED
-        ));
-        // 비공유 타인 운행 기록 (FR-M03-2에 의해 노출/집계 제외 대상)
-        allTrips.add(new TripRecord(
-                "trip_unshared_hidden",
-                VEHICLE_ID_PRIMARY,
-                "어제 23:00",
-                "비공유 타인 단독 운행 (집계 제외)",
-                50.0,
-                60,
-                "비공유 타인 기록",
-                6500L,
-                ExpenseRecord.Ownership.UNSHARED_OTHER
-        ));
+    public synchronized void addPendingTask(@NonNull PendingTaskItem item) {
+        for (int i = 0; i < allPendingTasks.size(); i++) {
+            if (allPendingTasks.get(i).getTaskId().equals(item.getTaskId())) {
+                allPendingTasks.set(i, item);
+                return;
+            }
+        }
+        allPendingTasks.add(item);
+    }
 
-        // 차량 1 이번 달 지출 내역
-        // 1) 본인 확인 주유: 72,000원
-        allExpenses.add(new ExpenseRecord(
-                "exp_p_1",
-                VEHICLE_ID_PRIMARY,
-                ExpenseRecord.Category.FUEL,
-                ExpenseRecord.Ownership.MY_RECORD,
-                ExpenseRecord.ConfirmationState.USER_CONFIRMED,
-                "GS칼텍스 역삼점 주유 (43.5L)",
-                "11.01",
-                72000L
-        ));
-        // 2) 명시적 공유 확인 정비: 58,000원
-        allExpenses.add(new ExpenseRecord(
-                "exp_p_2",
-                VEHICLE_ID_PRIMARY,
-                ExpenseRecord.Category.MAINTENANCE,
-                ExpenseRecord.Ownership.EXPLICITLY_SHARED,
-                ExpenseRecord.ConfirmationState.USER_CONFIRMED,
-                "엔진오일 및 에어클리너 교환 (공동 지출)",
-                "11.02",
-                58000L
-        ));
-        // 3) 미확인 추정 주유 건: 68,000원 (별도 수/금액으로 표현)
-        allExpenses.add(new ExpenseRecord(
-                "exp_p_3",
-                VEHICLE_ID_PRIMARY,
-                ExpenseRecord.Category.FUEL,
-                ExpenseRecord.Ownership.MY_RECORD,
-                ExpenseRecord.ConfirmationState.UNCONFIRMED_ESTIMATE,
-                "SK강남주유소 카드 승인 추정 (미확인)",
-                "11.03",
-                68000L
-        ));
-        // 4) 운행 소비 추정 비용: 4,400원 (FR-M03-3: 월 지출에 중복 합산하지 않음)
-        allExpenses.add(new ExpenseRecord(
-                "exp_p_trip_est",
-                VEHICLE_ID_PRIMARY,
-                ExpenseRecord.Category.TRIP_CONSUMPTION_ESTIMATE,
-                ExpenseRecord.Ownership.MY_RECORD,
-                ExpenseRecord.ConfirmationState.USER_CONFIRMED,
-                "이번 달 운행 연료 소비 추정액",
-                "11.03",
-                4400L
-        ));
-        // 5) 비공유 타인 지출: 99,000원 (FR-M03-2: 집계 제외)
-        allExpenses.add(new ExpenseRecord(
-                "exp_p_unshared",
-                VEHICLE_ID_PRIMARY,
-                ExpenseRecord.Category.FUEL,
-                ExpenseRecord.Ownership.UNSHARED_OTHER,
-                ExpenseRecord.ConfirmationState.USER_CONFIRMED,
-                "비공유 타인 주유 기록",
-                "11.02",
-                99000L
-        ));
+    public synchronized void addTripRecord(@NonNull TripRecord record) {
+        for (int i = 0; i < allTrips.size(); i++) {
+            if (allTrips.get(i).getTripId().equals(record.getTripId())) {
+                allTrips.set(i, record);
+                return;
+            }
+        }
+        allTrips.add(record);
+    }
 
-        allMaintenanceItems.add(new MaintenanceScheduleItem(
-                "maint_p_1",
-                VEHICLE_ID_PRIMARY,
-                "와이퍼 블레이드 교체 예정",
-                "권장 주기 도래 (6개월 경과)",
-                "D-5",
-                true
-        ));
-        allMaintenanceItems.add(new MaintenanceScheduleItem(
-                "maint_p_2",
-                VEHICLE_ID_PRIMARY,
-                "타이어 위치 교환",
-                "목표 주행거리 40,000km 기준",
-                "1,120km 남음",
-                false
-        ));
+    public synchronized void addExpenseRecord(@NonNull ExpenseRecord record) {
+        for (int i = 0; i < allExpenses.size(); i++) {
+            if (allExpenses.get(i).getRecordId().equals(record.getRecordId())) {
+                allExpenses.set(i, record);
+                return;
+            }
+        }
+        allExpenses.add(record);
+    }
 
-        // === 차량 2 (VEHICLE_ID_SECONDARY: 88하 9012 경유) 데이터 (차량 전환 격리 검증용) ===
-        allPendingTasks.add(new PendingTaskItem(
-                "task_sec_m07",
-                VEHICLE_ID_SECONDARY,
-                PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM,
-                "[88하 9012] 경유 주유 영수증 확인 필요",
-                "현대오일뱅크 54,000원 · 사용자 확인 대기",
-                54000L
-        ));
+    public synchronized void addMaintenanceScheduleItem(@NonNull MaintenanceScheduleItem item) {
+        for (int i = 0; i < allMaintenanceItems.size(); i++) {
+            if (allMaintenanceItems.get(i).getScheduleId().equals(item.getScheduleId())) {
+                allMaintenanceItems.set(i, item);
+                return;
+            }
+        }
+        allMaintenanceItems.add(item);
+    }
 
-        allTrips.add(new TripRecord(
-                "trip_sec_1",
-                VEHICLE_ID_SECONDARY,
-                "11.01 14:20",
-                "수원 광교 → 인천 송도",
-                42.5,
-                52,
-                "본인 기록 · 귀속 완료",
-                4800L,
-                ExpenseRecord.Ownership.MY_RECORD
-        ));
-
-        allExpenses.add(new ExpenseRecord(
-                "exp_sec_1",
-                VEHICLE_ID_SECONDARY,
-                ExpenseRecord.Category.FUEL,
-                ExpenseRecord.Ownership.MY_RECORD,
-                ExpenseRecord.ConfirmationState.USER_CONFIRMED,
-                "S-OIL 광교점 경유 주유 (35.0L)",
-                "11.01",
-                51000L
-        ));
-        allExpenses.add(new ExpenseRecord(
-                "exp_sec_unconf",
-                VEHICLE_ID_SECONDARY,
-                ExpenseRecord.Category.FUEL,
-                ExpenseRecord.Ownership.MY_RECORD,
-                ExpenseRecord.ConfirmationState.UNCONFIRMED_ESTIMATE,
-                "현대오일뱅크 경유 결제 추정 (미확인)",
-                "11.02",
-                54000L
-        ));
-
-        allMaintenanceItems.add(new MaintenanceScheduleItem(
-                "maint_sec_1",
-                VEHICLE_ID_SECONDARY,
-                "요소수(AdBlue) 보충 점검",
-                "경유차 배출가스 저감장치 정기 점검",
-                "450km 남음",
-                true
-        ));
+    public synchronized double getLatestOdometerKm() {
+        return latestOdometerKm;
     }
 
     public synchronized void updateSyncTimestampNow() {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA);
         this.lastSyncedTimestamp = sdf.format(new Date());
+    }
+
+    /**
+     * 백엔드 GET /vehicle/home 및 GET /sync/status 응답(실제 서버 DB 데이터)을 M03 상태에 반영한다.
+     */
+    public synchronized void applyBackendVehicleHomeAndSync(
+            @Nullable String vehicleId,
+            @NonNull FuelogBackendApiClient.VehicleHomeResponse homeResp,
+            @NonNull FuelogBackendApiClient.SyncStatusResponse syncResp
+    ) {
+        String targetVid = (vehicleId != null && !vehicleId.trim().isEmpty())
+                ? vehicleId.trim()
+                : (selectedVehicleId != null ? selectedVehicleId : VEHICLE_ID_PRIMARY);
+
+        if (homeResp.success) {
+            String alias = (homeResp.vehicleAlias != null && !homeResp.vehicleAlias.trim().isEmpty())
+                    ? homeResp.vehicleAlias.trim()
+                    : "연동 차량";
+            registerOrUpdateVehicle(new VehicleProfile(
+                    targetVid,
+                    extractPlateFromLabel(alias),
+                    extractFuelTypeFromLabel(alias),
+                    alias,
+                    true
+            ));
+            selectedVehicleId = targetVid;
+            newUserEmptyMode = false;
+
+            if (homeResp.distanceKm != null && homeResp.distanceKm > 0) {
+                this.latestOdometerKm = homeResp.distanceKm;
+            }
+            if (homeResp.estimatedCostWon != null && homeResp.estimatedCostWon > 0) {
+                addExpenseRecord(new ExpenseRecord(
+                        "db_trip_est_" + targetVid,
+                        targetVid,
+                        ExpenseRecord.Category.TRIP_CONSUMPTION_ESTIMATE,
+                        ExpenseRecord.Ownership.MY_RECORD,
+                        ExpenseRecord.ConfirmationState.USER_CONFIRMED,
+                        "백엔드 집계 운행 연료 소비 추정액",
+                        "이번 달",
+                        homeResp.estimatedCostWon
+                ));
+            }
+            if (homeResp.fuelReviewCount != null && homeResp.fuelReviewCount > 0) {
+                addPendingTask(new PendingTaskItem(
+                        "db_fuel_review_" + targetVid,
+                        targetVid,
+                        PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM,
+                        "주유 기록 확인 필요 (" + homeResp.fuelReviewCount + "건)",
+                        "백엔드 주유 감지 내역 확인 대기",
+                        0L
+                ));
+            }
+            if (homeResp.maintenanceDueCount != null && homeResp.maintenanceDueCount > 0) {
+                addMaintenanceScheduleItem(new MaintenanceScheduleItem(
+                        "db_maint_due_" + targetVid,
+                        targetVid,
+                        "점검·교체 예정 정비 항목 (" + homeResp.maintenanceDueCount + "건)",
+                        "백엔드 차량 관리 기준 도래",
+                        homeResp.maintenanceDueCount + "건 도래",
+                        true
+                ));
+            }
+        }
+
+        if (syncResp.success && syncResp.lastSyncedAt != null && syncResp.lastSyncedAt.length() >= 16) {
+            this.lastSyncedTimestamp = syncResp.lastSyncedAt.substring(0, 16).replace('T', ' ');
+        } else if (homeResp.success && homeResp.generatedAt != null && homeResp.generatedAt.length() >= 16) {
+            this.lastSyncedTimestamp = homeResp.generatedAt.substring(0, 16).replace('T', ' ');
+        } else {
+            updateSyncTimestampNow();
+        }
+    }
+
+    /**
+     * 백엔드 GET /mobile/inbox 응답(M06 모바일 확인함 DB 데이터)을 M03 대시보드(확인할 기록 + 최근 운행 + 운행 소비 비용)에 반영한다.
+     */
+    public synchronized void applyBackendInboxItems(
+            @NonNull List<FuelogBackendApiClient.InboxTripSummaryItem> inboxItems
+    ) {
+        String targetVid = selectedVehicleId != null ? selectedVehicleId : VEHICLE_ID_PRIMARY;
+        if (vehicles.isEmpty() && !inboxItems.isEmpty()) {
+            registerOrUpdateVehicle(new VehicleProfile(
+                    targetVid,
+                    "연동 차량",
+                    "휘발유",
+                    "백엔드 연동 차량",
+                    true
+            ));
+        }
+
+        double totalDistance = 0.0;
+        for (FuelogBackendApiClient.InboxTripSummaryItem item : inboxItems) {
+            String taskId = "inbox_" + item.inboxItemId;
+            long cost = item.estimatedCostWon != null ? item.estimatedCostWon : 0L;
+            double dist = item.distanceKm != null ? item.distanceKm : 0.0;
+            double eff = item.fuelEfficiencyKmPerLiter != null ? item.fuelEfficiencyKmPerLiter : 0.0;
+            double fuel = item.fuelConsumedLiters != null ? item.fuelConsumedLiters : 0.0;
+            totalDistance += dist;
+
+            if (item.readAt == null) {
+                addPendingTask(new PendingTaskItem(
+                        taskId,
+                        targetVid,
+                        PendingTaskItem.TaskDestination.M04_TRIP_ATTRIBUTION,
+                        "백엔드 확인함 운행 요약 (#" + item.inboxItemId + ")",
+                        String.format(Locale.KOREA, "거리 %.1fkm · %.1fL (%.1fkm/L) · %,d원 · 읽음 확인 대기", dist, fuel, eff, cost),
+                        cost
+                ));
+            } else {
+                markInboxTaskReadLocally(item.inboxItemId);
+            }
+
+            String tripId = "backend_trip_" + item.tripId;
+            String shortId = item.tripId.substring(0, Math.min(8, item.tripId.length()));
+            String badge = (item.readAt != null ? "확인함 읽음 완료" : "확인함 미열람")
+                    + String.format(Locale.KOREA, " · %.1fkm/L · %,d원", eff, cost);
+            addTripRecord(new TripRecord(
+                    tripId,
+                    targetVid,
+                    item.deliveredAt != null && item.deliveredAt.length() >= 16
+                            ? item.deliveredAt.substring(0, 16).replace('T', ' ')
+                            : "방금",
+                    "백엔드 C04 운행 요약 (" + shortId + ")",
+                    dist,
+                    0,
+                    badge,
+                    cost,
+                    ExpenseRecord.Ownership.MY_RECORD
+            ));
+
+            if (cost > 0L) {
+                addExpenseRecord(new ExpenseRecord(
+                        "exp_trip_est_" + item.tripId,
+                        targetVid,
+                        ExpenseRecord.Category.TRIP_CONSUMPTION_ESTIMATE,
+                        ExpenseRecord.Ownership.MY_RECORD,
+                        ExpenseRecord.ConfirmationState.USER_CONFIRMED,
+                        "운행(" + shortId + ") 연료 소비 추정액",
+                        item.deliveredAt != null && item.deliveredAt.length() >= 10
+                                ? item.deliveredAt.substring(5, 10).replace('-', '.')
+                                : "이번 달",
+                        cost
+                ));
+            }
+        }
+        if (this.latestOdometerKm <= 0.0 && totalDistance > 0.0) {
+            this.latestOdometerKm = totalDistance;
+        }
+        updateSyncTimestampNow();
+    }
+
+    public synchronized void markInboxTaskReadLocally(long inboxItemId) {
+        String targetTaskId = "inbox_" + inboxItemId;
+        for (int i = allPendingTasks.size() - 1; i >= 0; i--) {
+            if (targetTaskId.equals(allPendingTasks.get(i).getTaskId())) {
+                allPendingTasks.remove(i);
+            }
+        }
     }
 
     @NonNull
@@ -442,5 +464,23 @@ public final class M03HomeRepository {
             }
         }
         return result;
+    }
+
+    @NonNull
+    private static String extractFuelTypeFromLabel(@NonNull String label) {
+        if (label.contains("경유")) return "경유";
+        if (label.contains("전기")) return "전기";
+        if (label.contains("LPG")) return "LPG";
+        if (label.contains("휘발유") || label.contains("가솔린")) return "휘발유";
+        return "서버 DB 차량 (유종 미지정)";
+    }
+
+    @NonNull
+    private static String extractPlateFromLabel(@NonNull String label) {
+        int idx = label.indexOf('(');
+        if (idx > 0) {
+            return label.substring(0, idx).trim();
+        }
+        return label.trim();
     }
 }

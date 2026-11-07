@@ -30,6 +30,13 @@ public final class UserCacheManager {
     private static final String KEY_PREV_CACHE_HIDDEN_NOTICE = "prev_cache_hidden_notice";
 
     private static final String VEHICLE_REGISTRY_PREFIX = "account_vehicle_";
+    private static final String VEHICLE_UUID_REGISTRY_PREFIX = "account_vehicle_uuid_";
+    private static final String INSTALLATION_ID_PREFIX = "account_inst_id_";
+    private static final String INSTALLATION_SECRET_PREFIX = "account_inst_secret_";
+    private static final String KEY_ACTIVE_SCOPED_TOKEN = "active_trip_scoped_token";
+    private static final String KEY_ACTIVE_CONSENT_ID = "active_trip_consent_id";
+    private static final String KEY_ACTIVE_CANDIDATE_ID = "active_trip_candidate_id";
+    private static final String KEY_ACTIVE_INTERVAL_ID = "active_trip_interval_id";
 
     private static volatile UserCacheManager instance;
 
@@ -43,7 +50,6 @@ public final class UserCacheManager {
         } else {
             this.prefs = null;
         }
-        seedDefaultDemoDataIfNeeded();
     }
 
     public static UserCacheManager getInstance(@NonNull Context context) {
@@ -57,20 +63,16 @@ public final class UserCacheManager {
         return instance;
     }
 
-    private void seedDefaultDemoDataIfNeeded() {
-        // 데모/검증용: car@fuelog.com 계정은 기본 등록 차량 보유(M03 이동),
-        // new@fuelog.com 또는 신규 가입 계정은 차량 없음(M02 이동)
-        if (getString(VEHICLE_REGISTRY_PREFIX + "user_with_car", null) == null) {
-            putString(VEHICLE_REGISTRY_PREFIX + "user_with_car", "아이오닉 6 롱레인지 (12가 3456)");
-        }
-    }
-
     /**
      * 세션 만료 또는 로그아웃 시 호출.
      * 즉시 화면 캐시 노출을 차단(숨김)하되, 다음 로그인 계정과 비교하기 위해 last_user_id는 유지한다.
      */
     public synchronized void onSessionExpiredOrLoggedOut() {
         putBoolean(KEY_CACHE_VISIBLE, false);
+        removeKey(KEY_ACTIVE_SCOPED_TOKEN);
+        removeKey(KEY_ACTIVE_CONSENT_ID);
+        removeKey(KEY_ACTIVE_CANDIDATE_ID);
+        removeKey(KEY_ACTIVE_INTERVAL_ID);
         SafeLogger.i("세션 만료/로그아웃 감지: 현재 계정 캐시를 화면에서 즉시 숨김 처리했습니다.");
     }
 
@@ -88,6 +90,10 @@ public final class UserCacheManager {
             // 이전 계정 캐시 완전 숨김 및 삭제
             removeKey(KEY_CACHED_VEHICLE_NAME);
             removeKey(KEY_CACHED_FUEL_SUMMARY);
+            removeKey(KEY_ACTIVE_SCOPED_TOKEN);
+            removeKey(KEY_ACTIVE_CONSENT_ID);
+            removeKey(KEY_ACTIVE_CANDIDATE_ID);
+            removeKey(KEY_ACTIVE_INTERVAL_ID);
             putBoolean(KEY_PREV_CACHE_HIDDEN_NOTICE, true);
             SafeLogger.i("다른 계정 진입 감지(prev=" + previousUserId + " -> new=" + newUserId
                     + "): 이전 계정 캐시를 숨김 및 초기화했습니다.");
@@ -103,7 +109,6 @@ public final class UserCacheManager {
         String accountVehicle = getString(VEHICLE_REGISTRY_PREFIX + newUserId, null);
         if (accountVehicle != null && !accountVehicle.isEmpty()) {
             putString(KEY_CACHED_VEHICLE_NAME, accountVehicle);
-            putString(KEY_CACHED_FUEL_SUMMARY, "최근 평균 연비 14.8 km/L · 이번 달 주유 2회");
         } else {
             removeKey(KEY_CACHED_VEHICLE_NAME);
             removeKey(KEY_CACHED_FUEL_SUMMARY);
@@ -136,6 +141,14 @@ public final class UserCacheManager {
         return getString(KEY_CACHED_FUEL_SUMMARY, null);
     }
 
+    public synchronized void setCachedFuelSummary(@Nullable String summary) {
+        if (summary == null || summary.trim().isEmpty()) {
+            removeKey(KEY_CACHED_FUEL_SUMMARY);
+        } else {
+            putString(KEY_CACHED_FUEL_SUMMARY, summary.trim());
+        }
+    }
+
     public synchronized boolean hasRegisteredVehicle(@NonNull String userId) {
         String vehicle = getString(VEHICLE_REGISTRY_PREFIX + userId, null);
         return vehicle != null && !vehicle.trim().isEmpty();
@@ -152,7 +165,6 @@ public final class UserCacheManager {
             putString(VEHICLE_REGISTRY_PREFIX + userId, vehicleName.trim());
             if (userId.equals(getString(KEY_LAST_USER_ID, null)) && isCacheVisible()) {
                 putString(KEY_CACHED_VEHICLE_NAME, vehicleName.trim());
-                putString(KEY_CACHED_FUEL_SUMMARY, "최근 평균 연비 14.8 km/L · 첫 차량 등록 완료");
             }
         }
     }
@@ -160,6 +172,95 @@ public final class UserCacheManager {
     @Nullable
     public synchronized String getLastAuthenticatedUserId() {
         return getString(KEY_LAST_USER_ID, null);
+    }
+
+    @Nullable
+    public synchronized String getRegisteredVehicleUuid(@NonNull String userId) {
+        return getString(VEHICLE_UUID_REGISTRY_PREFIX + userId, null);
+    }
+
+    public synchronized void setRegisteredVehicleUuid(@NonNull String userId, @Nullable String vehicleUuid) {
+        if (vehicleUuid == null || vehicleUuid.trim().isEmpty()) {
+            removeKey(VEHICLE_UUID_REGISTRY_PREFIX + userId);
+        } else {
+            putString(VEHICLE_UUID_REGISTRY_PREFIX + userId, vehicleUuid.trim());
+        }
+    }
+
+    @Nullable
+    public synchronized String getInstallationId(@NonNull String userId) {
+        return getString(INSTALLATION_ID_PREFIX + userId, null);
+    }
+
+    @Nullable
+    public synchronized String getInstallationSecret(@NonNull String userId) {
+        return getString(INSTALLATION_SECRET_PREFIX + userId, null);
+    }
+
+    public synchronized void setInstallationCredentials(
+            @NonNull String userId,
+            @Nullable String installationId,
+            @Nullable String installationSecret
+    ) {
+        if (installationId == null || installationSecret == null) {
+            removeKey(INSTALLATION_ID_PREFIX + userId);
+            removeKey(INSTALLATION_SECRET_PREFIX + userId);
+        } else {
+            putString(INSTALLATION_ID_PREFIX + userId, installationId.trim());
+            putString(INSTALLATION_SECRET_PREFIX + userId, installationSecret.trim());
+        }
+    }
+
+    @Nullable
+    public synchronized String getActiveScopedToken() {
+        return isCacheVisible() ? getString(KEY_ACTIVE_SCOPED_TOKEN, null) : null;
+    }
+
+    public synchronized void setActiveScopedToken(@Nullable String scopedToken) {
+        if (scopedToken == null || scopedToken.trim().isEmpty()) {
+            removeKey(KEY_ACTIVE_SCOPED_TOKEN);
+        } else {
+            putString(KEY_ACTIVE_SCOPED_TOKEN, scopedToken.trim());
+        }
+    }
+
+    @Nullable
+    public synchronized String getActiveConsentId() {
+        return isCacheVisible() ? getString(KEY_ACTIVE_CONSENT_ID, null) : null;
+    }
+
+    public synchronized void setActiveConsentId(@Nullable String consentId) {
+        if (consentId == null || consentId.trim().isEmpty()) {
+            removeKey(KEY_ACTIVE_CONSENT_ID);
+        } else {
+            putString(KEY_ACTIVE_CONSENT_ID, consentId.trim());
+        }
+    }
+
+    @Nullable
+    public synchronized String getActiveCandidateId() {
+        return isCacheVisible() ? getString(KEY_ACTIVE_CANDIDATE_ID, null) : null;
+    }
+
+    public synchronized void setActiveCandidateId(@Nullable String candidateId) {
+        if (candidateId == null || candidateId.trim().isEmpty()) {
+            removeKey(KEY_ACTIVE_CANDIDATE_ID);
+        } else {
+            putString(KEY_ACTIVE_CANDIDATE_ID, candidateId.trim());
+        }
+    }
+
+    @Nullable
+    public synchronized String getActiveIntervalId() {
+        return isCacheVisible() ? getString(KEY_ACTIVE_INTERVAL_ID, null) : null;
+    }
+
+    public synchronized void setActiveIntervalId(@Nullable String intervalId) {
+        if (intervalId == null || intervalId.trim().isEmpty()) {
+            removeKey(KEY_ACTIVE_INTERVAL_ID);
+        } else {
+            putString(KEY_ACTIVE_INTERVAL_ID, intervalId.trim());
+        }
     }
 
     private void putString(String key, String value) {

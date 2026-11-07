@@ -25,7 +25,8 @@ import com.pleos.mobile_app_fuelog.ui.auth.M01LoginViewModel;
 /**
  * 메인 액티비티.
  * - 좌측 상단 드로어 메뉴 없이 하단바(홈·운행·차계부·관리)로 모든 메뉴를 제공한다.
- * - 저장된 계정(유효 세션)이 있을 때는 M01 로그인 화면을 띄우지 않고 곧바로 M03(차량 있음) 또는 M02(차량 없음)로 진입한다.
+ * - 저장된 계정(유효 세션)이 있을 때는 M01 로그인 화면을 띄우지 않고 곧바로 진입한다.
+ * - 차량 연동은 Bluetooth SPP 없이 차량 화면(C01)의 QR 코드 인식만을 통해 수행한다.
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -54,7 +55,6 @@ public class MainActivity extends AppCompatActivity {
         }
         navController = navHostFragment.getNavController();
 
-        // 최초 실행 시 저장된 계정 유무에 따라 시작 화면(startDestination)을 결정 (로그인 화면 깜빡임 원천 차단)
         if (savedInstanceState == null) {
             NavGraph navGraph = navController.getNavInflater().inflate(R.navigation.mobile_navigation);
             AuthSession savedSession = authRepository.getCurrentValidSession();
@@ -67,7 +67,6 @@ public class MainActivity extends AppCompatActivity {
             navController.setGraph(navGraph);
         }
 
-        // 화면 목적지에 따라 하단바 노출 여부 제어 (로그인·차량등록에서는 숨기고, 메인 홈에서는 표시)
         navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
             int destId = destination.getId();
             if (destId == R.id.nav_m01_login || destId == R.id.nav_m02_no_vehicle) {
@@ -91,9 +90,10 @@ public class MainActivity extends AppCompatActivity {
                 }
                 return true;
             } else if (itemId == R.id.bottom_tab_driving) {
-                Snackbar.make(binding.getRoot(),
-                        "운행: 최근 운행 기록 및 운행 귀속(M04) 화면",
-                        Snackbar.LENGTH_SHORT).show();
+                if (navController.getCurrentDestination() != null
+                        && navController.getCurrentDestination().getId() != R.id.nav_m04_driver_connection) {
+                    navController.navigate(R.id.nav_m04_driver_connection);
+                }
                 return true;
             } else if (itemId == R.id.bottom_tab_ledger) {
                 Snackbar.make(binding.getRoot(),
@@ -101,9 +101,10 @@ public class MainActivity extends AppCompatActivity {
                         Snackbar.LENGTH_SHORT).show();
                 return true;
             } else if (itemId == R.id.bottom_tab_manage) {
-                Snackbar.make(binding.getRoot(),
-                        "관리: 정비 예정 및 차량·계정 관리(M13) 화면",
-                        Snackbar.LENGTH_SHORT).show();
+                if (navController.getCurrentDestination() != null
+                        && navController.getCurrentDestination().getId() != R.id.nav_manage_settings) {
+                    navController.navigate(R.id.nav_manage_settings);
+                }
                 return true;
             }
             return false;

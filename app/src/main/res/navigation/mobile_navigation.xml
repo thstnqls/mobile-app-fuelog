@@ -22,4 +22,16 @@
         android:name="com.pleos.mobile_app_fuelog.ui.main.M03VehicleHomeFragment"
         android:label="M03. 내 차 대시보드"
         tools:layout="@layout/fragment_m03_vehicle_home" />
+
+    <fragment
+        android:id="@+id/nav_m04_driver_connection"
+        android:name="com.pleos.mobile_app_fuelog.ui.connection.M04DriverConnectionFragment"
+        android:label="M04. 운행 · 내 계정 연결"
+        tools:layout="@layout/fragment_m04_driver_connection" />
+
+    <fragment
+        android:id="@+id/nav_manage_settings"
+        android:name="com.pleos.mobile_app_fuelog.ui.manage.ManageSettingsFragment"
+        android:label="관리 · 설정"
+        tools:layout="@layout/fragment_manage_settings" />
 </navigation>

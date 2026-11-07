@@ -36,12 +36,15 @@ import com.pleos.mobile_app_fuelog.data.home.MonthlyExpenseSummary;
 import com.pleos.mobile_app_fuelog.data.home.PendingTaskItem;
 import com.pleos.mobile_app_fuelog.data.home.TripRecord;
 import com.pleos.mobile_app_fuelog.data.home.VehicleProfile;
+import com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient;
 import com.pleos.mobile_app_fuelog.ui.auth.M01LoginFragment;
 
 import java.text.NumberFormat;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Executors;
 
 /**
  * M03. 홈 화면 Fragment (차봇 스타일 모던 차량관리 UI).
@@ -87,7 +90,8 @@ public class M03VehicleHomeFragment extends Fragment {
         }
 
         String userRegisteredVehicle = userCacheManager.getVisibleCachedVehicleName();
-        homeRepository.seedDefaultData(userRegisteredVehicle);
+        String userVehicleUuid = userCacheManager.getRegisteredVehicleUuid(session.getUserId());
+        homeRepository.clearAllAndInitVehicle(userVehicleUuid, userRegisteredVehicle);
 
         setupHeaderActions();
         setupExpenseCardActions();
@@ -103,16 +107,65 @@ public class M03VehicleHomeFragment extends Fragment {
         }
 
         renderDashboard();
+        syncInboxFromBackend();
+    }
+
+    private void syncInboxFromBackend() {
+        Executors.newSingleThreadExecutor().execute(() -> {
+            AuthSession session = authRepository.getCurrentValidSession();
+            if (session == null) {
+                return;
+            }
+            FuelogBackendApiClient apiClient = FuelogBackendApiClient.getInstance(authRepository);
+            String userId = session.getUserId();
+            String instId = userCacheManager.getInstallationId(userId);
+            String instSecret = userCacheManager.getInstallationSecret(userId);
+            String primaryLabel = userCacheManager.getVisibleCachedVehicleName();
+
+            // 1) 백엔드 차량 페어링 및 C02/C03 세션 확인 (GET /installations/me, GET /vehicle/home)
+            FuelogBackendApiClient.EndToEndVehicleSyncResult syncResult =
+                    ((instId != null && instSecret != null) || (primaryLabel != null && !primaryLabel.trim().isEmpty()))
+                            ? apiClient.authenticateAndVerifyTripUserEndToEnd(
+                                    userCacheManager,
+                                    primaryLabel != null ? primaryLabel : "QR 연동 차량"
+                            )
+                            : new FuelogBackendApiClient.EndToEndVehicleSyncResult(false, null, null, null, null, null, null, null, null);
+
+            // 2) 백엔드 차량 홈(GET /vehicle/home) 및 동기화 상태(GET /sync/status) 조회 (실제 DB의 vehicles.name 반영)
+            if (syncResult.installationSecret != null) {
+                FuelogBackendApiClient.VehicleHomeResponse homeResp =
+                        apiClient.fetchVehicleHome(syncResult.installationSecret, syncResult.scopedToken);
+                FuelogBackendApiClient.SyncStatusResponse syncStatusResp =
+                        apiClient.fetchSyncStatus(syncResult.installationSecret);
+                if (homeResp.success && homeResp.vehicleAlias != null && !homeResp.vehicleAlias.trim().isEmpty()) {
+                    userCacheManager.setRegisteredVehicleForUser(userId, homeResp.vehicleAlias.trim());
+                }
+                homeRepository.applyBackendVehicleHomeAndSync(syncResult.vehicleId, homeResp, syncStatusResp);
+            }
+
+            // 3) 백엔드 M06 모바일 확인함(GET /mobile/inbox) 실제 DB 데이터 조회
+            FuelogBackendApiClient.InboxPageResponse page = apiClient.fetchMobileInbox(0L);
+            if (page.success && !page.items.isEmpty()) {
+                homeRepository.applyBackendInboxItems(page.items);
+            }
+            if (isAdded() && binding != null) {
+                requireActivity().runOnUiThread(this::renderDashboard);
+            }
+        });
     }
 
     private void setupHeaderActions() {
         // 우측 상단 [⇄ 변경] 버튼: 차량 전환(이전 차량 데이터 격리), 신규 사용자 빈 상태, 로그아웃 등 선택
         binding.btnM03ChangeVehicle.setOnClickListener(v -> showVehicleSwitcherDialog());
 
-        // 동기화 배지 탭 시 온라인/오프라인(마지막 갱신 시각) 전환
+        // 동기화 배지 탭 시 온라인(백엔드 재동기화)/오프라인(마지막 갱신 시각) 전환
         binding.tvM03SyncStatus.setOnClickListener(v -> {
-            homeRepository.setOfflineMode(!homeRepository.isOfflineMode());
+            boolean nextOffline = !homeRepository.isOfflineMode();
+            homeRepository.setOfflineMode(nextOffline);
             renderSyncStatusHeader();
+            if (!nextOffline) {
+                syncInboxFromBackend();
+            }
         });
 
         binding.btnM03EmptyRegisterVehicle.setOnClickListener(v ->
@@ -139,35 +192,26 @@ public class M03VehicleHomeFragment extends Fragment {
     }
 
     private void showVehicleSwitcherDialog() {
-        String primaryLabel = homeRepository.getVehicles().isEmpty()
-                ? "12가 3456 (휘발유)"
-                : homeRepository.getVehicles().get(0).getDisplayName();
+        List<VehicleProfile> vehicles = homeRepository.getVehicles();
+        List<String> optionList = new ArrayList<>();
+        for (VehicleProfile v : vehicles) {
+            optionList.add("🚗 " + v.getDisplayName());
+        }
+        optionList.add("➕ 새 차량 추가 등록 / 연동 (M02)");
+        optionList.add("🚪 로그아웃 (다른 계정으로 전환)");
 
-        String[] options = new String[]{
-                "🚗 " + primaryLabel + " (메인 차량)",
-                "🚙 88하 9012 (경유 · 세컨드카)",
-                "➕ 새 차량 추가 등록 (M02)",
-                "🆕 신규 사용자 빈 상태 보기",
-                "🚪 로그아웃 (다른 계정으로 전환)"
-        };
+        String[] options = optionList.toArray(new String[0]);
 
         new MaterialAlertDialogBuilder(requireContext())
                 .setTitle("차량 전환 및 관리")
                 .setItems(options, (dialog, which) -> {
-                    if (which == 0) {
+                    if (which < vehicles.size()) {
                         homeRepository.setNewUserEmptyMode(false);
-                        homeRepository.selectVehicle(M03HomeRepository.VEHICLE_ID_PRIMARY);
+                        homeRepository.selectVehicle(vehicles.get(which).getVehicleId());
                         renderDashboard();
-                    } else if (which == 1) {
-                        homeRepository.setNewUserEmptyMode(false);
-                        homeRepository.selectVehicle(M03HomeRepository.VEHICLE_ID_SECONDARY);
-                        renderDashboard();
-                    } else if (which == 2) {
+                    } else if (which == vehicles.size()) {
                         NavHostFragment.findNavController(this).navigate(R.id.nav_m02_no_vehicle);
-                    } else if (which == 3) {
-                        homeRepository.setNewUserEmptyMode(true);
-                        renderDashboard();
-                    } else if (which == 4) {
+                    } else {
                         authRepository.signOut();
                         navigateBackToM01();
                     }
@@ -222,12 +266,15 @@ public class M03VehicleHomeFragment extends Fragment {
         binding.layoutM03DashboardContent.setVisibility(View.VISIBLE);
 
         binding.tvM03PlateNumber.setText(selectedVehicle.getDisplayName());
-        if (M03HomeRepository.VEHICLE_ID_SECONDARY.equals(selectedVehicle.getVehicleId())) {
-            binding.tvM03VehicleSubinfo.setText("경유 · 개인 전용 차량");
-            binding.tvM03OdometerValue.setText("78,910 km");
+        binding.tvM03VehicleSubinfo.setText(
+                selectedVehicle.getFuelType()
+                        + (selectedVehicle.isSharedVehicle() ? " · 공동 관리 차량" : " · 개인 전용 차량")
+        );
+        double odoKm = homeRepository.getLatestOdometerKm();
+        if (odoKm > 0.0) {
+            binding.tvM03OdometerValue.setText(String.format(Locale.KOREA, "%,.1f km", odoKm));
         } else {
-            binding.tvM03VehicleSubinfo.setText(selectedVehicle.getFuelType() + " · 공동 관리 차량");
-            binding.tvM03OdometerValue.setText("42,350 km");
+            binding.tvM03OdometerValue.setText("최신 거리 확인 필요");
         }
 
         renderPendingTasksSection();
@@ -297,7 +344,21 @@ public class M03VehicleHomeFragment extends Fragment {
     }
 
     private void onPendingTaskClicked(@NonNull PendingTaskItem task) {
+        if (task.getTaskId().startsWith("inbox_")) {
+            try {
+                long inboxItemId = Long.parseLong(task.getTaskId().substring("inbox_".length()));
+                homeRepository.markInboxTaskReadLocally(inboxItemId);
+                Executors.newSingleThreadExecutor().execute(() ->
+                        FuelogBackendApiClient.getInstance(authRepository).markInboxItemAsRead(inboxItemId)
+                );
+            } catch (NumberFormatException ignored) {
+            }
+        }
         PendingTaskItem.TaskDestination dest = task.getDestination();
+        if (dest == PendingTaskItem.TaskDestination.M04_TRIP_ATTRIBUTION) {
+            NavHostFragment.findNavController(this).navigate(R.id.nav_m04_driver_connection);
+            return;
+        }
         new MaterialAlertDialogBuilder(requireContext())
                 .setTitle(dest.getScreenCode() + " · " + dest.getBadgeLabel())
                 .setMessage(task.getTitle() + "\n\n" + task.getSubtitle())

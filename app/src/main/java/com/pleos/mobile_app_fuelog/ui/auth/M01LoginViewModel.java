@@ -243,6 +243,12 @@ public class M01LoginViewModel extends ViewModel {
             return;
         }
 
+        if (result.getSession() == null && result.getNoticeMessage() != null) {
+            recoveryGuidanceMessage.postValue(result.getNoticeMessage());
+            authMode.postValue(AuthMode.LOGIN);
+            return;
+        }
+
         previousAccountCacheHidden.postValue(result.isPreviousAccountCacheHidden());
         DeepLinkRouter.RouteDecision decision = deepLinkRouter.resolvePostLoginRoute(
                 result.hasVehicle(),

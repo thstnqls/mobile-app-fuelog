@@ -9,6 +9,7 @@ import androidx.annotation.Nullable;
 import com.pleos.mobile_app_fuelog.BuildConfig;
 import com.pleos.mobile_app_fuelog.core.security.SafeLogger;
 import com.pleos.mobile_app_fuelog.data.cache.UserCacheManager;
+import com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -73,7 +74,6 @@ public final class AuthRepository {
             this.prefs = null;
         }
         this.userCacheManager = userCacheManager;
-        seedDefaultLocalAccounts();
     }
 
     public static AuthRepository getInstance(@NonNull Context context) {
@@ -87,20 +87,10 @@ public final class AuthRepository {
         return instance;
     }
 
-    private void seedDefaultLocalAccounts() {
-        // 데모 및 검증용 기본 계정 2개:
-        // 1) car@fuelog.com / fuelog1234 -> 차량 보유 계정 (M03 이동, userId = user_with_car)
-        // 2) new@fuelog.com / fuelog1234 -> 차량 미보유 계정 (M02 이동, userId = user_no_car)
-        registerLocalSeedAccount("car@fuelog.com", "fuelog1234", "user_with_car");
-        registerLocalSeedAccount("new@fuelog.com", "fuelog1234", "user_no_car");
-    }
-
-    private void registerLocalSeedAccount(String email, String password, String userId) {
+    public void registerLocalAccountForTest(@NonNull String email, @NonNull String password, @NonNull String userId) {
         String normalized = email.trim().toLowerCase(Locale.ROOT);
-        if (getPref(ACCOUNT_UID_PREFIX + normalized, null) == null) {
-            putPref(ACCOUNT_UID_PREFIX + normalized, userId);
-            putPref(ACCOUNT_PW_HASH_PREFIX + normalized, sha256(password));
-        }
+        putPref(ACCOUNT_UID_PREFIX + normalized, userId);
+        putPref(ACCOUNT_PW_HASH_PREFIX + normalized, sha256(password));
     }
 
     public boolean isRemoteSupabaseConfigured() {
@@ -174,12 +164,81 @@ public final class AuthRepository {
         );
 
         if (session.isExpired(nowEpochSeconds)) {
+            if (isRemoteSupabaseConfigured() && !session.getRefreshToken().trim().isEmpty()) {
+                AuthSession refreshed = refreshRemoteSupabaseSession(
+                        session.getRefreshToken().trim(),
+                        session.getEmail(),
+                        session.isTermsAccepted()
+                );
+                if (refreshed != null && !refreshed.isExpired(nowEpochSeconds)) {
+                    saveSessionToPrefs(refreshed);
+                    SafeLogger.i("만료된 JWT 세션을 refresh_token으로 자동 갱신 완료: user=" + refreshed.getUserId());
+                    return refreshed;
+                }
+            }
             SafeLogger.w("세션 만료 감지(user=" + SafeLogger.maskEmail(email) + "). 재로그인이 필요합니다.");
             clearStoredSessionTokensOnly();
             userCacheManager.onSessionExpiredOrLoggedOut();
             return null;
         }
         return session;
+    }
+
+    /**
+     * API 호출에 즉시 사용할 수 있는 유효한 Access Token(JWT)을 반환한다.
+     * 만료된 경우 refresh_token 갱신을 시도하며, 유효한 세션이 없으면 null을 반환한다.
+     */
+    @Nullable
+    public synchronized String getValidAccessToken() {
+        AuthSession session = getCurrentValidSession();
+        return session != null ? session.getAccessToken() : null;
+    }
+
+    /**
+     * API 요청의 Authorization 헤더 값("Bearer <accessToken>")을 반환한다.
+     */
+    @Nullable
+    public synchronized String getAuthorizationBearerHeader() {
+        String token = getValidAccessToken();
+        if (token == null || token.trim().isEmpty()) {
+            return null;
+        }
+        return "Bearer " + token;
+    }
+
+    /**
+     * 현재 세션의 Bearer 토큰(JWT)과 Supabase apikey 헤더가 자동 주입된 HttpURLConnection을 생성한다.
+     *
+     * @param endpointOrUrl "/rest/v1/..." 상대 경로 또는 전체 URL
+     * @param method        "GET", "POST", "PATCH", "DELETE" 등 HTTP 메서드
+     */
+    @NonNull
+    public HttpURLConnection openAuthenticatedConnection(
+            @NonNull String endpointOrUrl,
+            @NonNull String method
+    ) throws IOException {
+        String bearer = getAuthorizationBearerHeader();
+        if (bearer == null) {
+            throw new IOException("유효한 인증 토큰(JWT)이 없습니다. 먼저 로그인해 주세요.");
+        }
+        String fullUrl;
+        if (endpointOrUrl.startsWith("http://") || endpointOrUrl.startsWith("https://")) {
+            fullUrl = endpointOrUrl;
+        } else {
+            String baseUrl = stripTrailingSlash(BuildConfig.SUPABASE_URL != null ? BuildConfig.SUPABASE_URL : "");
+            String path = endpointOrUrl.startsWith("/") ? endpointOrUrl : ("/" + endpointOrUrl);
+            fullUrl = baseUrl + path;
+        }
+        HttpURLConnection conn = (HttpURLConnection) new URL(fullUrl).openConnection();
+        conn.setRequestMethod(method);
+        conn.setConnectTimeout(8000);
+        conn.setReadTimeout(8000);
+        if (BuildConfig.SUPABASE_ANON_KEY != null && !BuildConfig.SUPABASE_ANON_KEY.trim().isEmpty()) {
+            conn.setRequestProperty("apikey", BuildConfig.SUPABASE_ANON_KEY);
+        }
+        conn.setRequestProperty("Authorization", bearer);
+        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+        return conn;
     }
 
     /**
@@ -289,6 +348,7 @@ public final class AuthRepository {
      * 현재 세션을 만료 상태로 전환 (세션 만료 후 재진입 테스트 및 검증용).
      */
     public synchronized void expireCurrentSession() {
+        revokeBackendSessionAsync();
         putPref(KEY_EXPIRES_AT, "0");
         userCacheManager.onSessionExpiredOrLoggedOut();
     }
@@ -297,9 +357,33 @@ public final class AuthRepository {
      * 로그아웃 처리.
      */
     public synchronized void signOut() {
+        revokeBackendSessionAsync();
         clearStoredSessionTokensOnly();
         userCacheManager.onSessionExpiredOrLoggedOut();
         SafeLogger.i("로그아웃 완료 및 캐시 숨김 적용");
+    }
+
+    private void revokeBackendSessionAsync() {
+        final String consentId = userCacheManager.getActiveConsentId();
+        final String scopedToken = userCacheManager.getActiveScopedToken();
+        final String userId = userCacheManager.getLastAuthenticatedUserId();
+        final String instSecret = userId != null ? userCacheManager.getInstallationSecret(userId) : null;
+        final String accessToken = getPref(KEY_ACCESS_TOKEN, null);
+        if ((consentId == null && scopedToken == null) || accessToken == null || accessToken.startsWith("local_jwt_")) {
+            return;
+        }
+        new Thread(() -> {
+            try {
+                FuelogBackendApiClient client = FuelogBackendApiClient.getInstance(this);
+                if (consentId != null && !consentId.isEmpty()) {
+                    client.revokeTripUserConsent(consentId);
+                }
+                if (instSecret != null && scopedToken != null && !scopedToken.isEmpty()) {
+                    client.deleteTripUserSession(instSecret, scopedToken);
+                }
+            } catch (Exception ignored) {
+            }
+        }).start();
     }
 
     private AuthResult signInWithLocalFallback(String normalizedEmail, String password) {
@@ -381,6 +465,12 @@ public final class AuthRepository {
 
             if (status >= 200 && status < 300) {
                 AuthSession session = parseSupabaseSession(responseBody, normalizedEmail);
+                if (session == null) {
+                    return AuthResult.failure(
+                            AuthError.serverError("서버로부터 유효한 JWT access_token을 받지 못했습니다.", 500)
+                    );
+                }
+                session = verifySessionWithBackendMe(session);
                 boolean hasRemoteVehicle = fetchRemoteHasVehicle(session.getAccessToken(), session.getUserId());
                 if (hasRemoteVehicle && !userCacheManager.hasRegisteredVehicle(session.getUserId())) {
                     userCacheManager.setRegisteredVehicleForUser(session.getUserId(), "등록 차량");
@@ -396,12 +486,6 @@ public final class AuthRepository {
                 );
             } else {
                 SafeLogger.w("Supabase Auth 입력/자격증명 오류 status=" + status);
-                // 데모 빠른 테스트 계정(car@fuelog.com, new@fuelog.com)이 원격 DB에 아직 없을 경우 로컬 시드 폴백 허용
-                if (("car@fuelog.com".equals(normalizedEmail) || "new@fuelog.com".equals(normalizedEmail))
-                        && "fuelog1234".equals(password)) {
-                    SafeLogger.i("데모 시드 계정 로컬 폴백 전환: " + SafeLogger.maskEmail(normalizedEmail));
-                    return signInWithLocalFallback(normalizedEmail, password);
-                }
                 String detailMsg = extractSupabaseErrorMessage(
                         responseBody,
                         "이메일 또는 비밀번호가 일치하지 않습니다."
@@ -462,7 +546,21 @@ public final class AuthRepository {
 
             if (status >= 200 && status < 300) {
                 AuthSession session = parseSupabaseSession(responseBody, normalizedEmail);
-                return finalizeAuthenticatedSession(session);
+                if (session != null) {
+                    session = verifySessionWithBackendMe(session);
+                    return finalizeAuthenticatedSession(session);
+                }
+                // /auth/v1/signup 응답에 access_token이 없는 경우(Confirm email 켜짐 등):
+                // 가짜 토큰을 만들지 않고 즉시 password grant 로그인으로 실제 JWT 발급을 시도한다.
+                AuthResult tokenAttempt = signInWithRemoteSupabase(normalizedEmail, password);
+                if (tokenAttempt.isSuccess()) {
+                    return tokenAttempt;
+                }
+                return AuthResult.recoverySuccess(
+                        "계정이 생성되었으나 이메일 인증 대기 상태여서 API 호출용 JWT 토큰이 아직 발급되지 않았습니다. "
+                        + "발송된 인증 메일의 링크를 누른 뒤 로그인하거나, 가입 즉시 JWT 토큰을 발급받으려면 "
+                        + "Supabase Dashboard(Authentication -> Providers -> Email)에서 'Confirm email'을 꺼주세요."
+                );
             } else if (status >= 500 || status == 429) {
                 return AuthResult.failure(
                         AuthError.serverError(
@@ -471,11 +569,12 @@ public final class AuthRepository {
                         )
                 );
             } else {
+                String detailMsg = extractSupabaseErrorMessage(
+                        responseBody,
+                        "회원가입 입력 정보를 다시 확인해 주세요(이미 사용 중인 이메일이거나 사용할 수 없는 비밀번호입니다)."
+                );
                 return AuthResult.failure(
-                        AuthError.inputError(
-                                AuthError.Field.EMAIL,
-                                "회원가입 입력 정보를 다시 확인해 주세요(이미 사용 중인 이메일이거나 사용할 수 없는 비밀번호입니다)."
-                        )
+                        AuthError.inputError(AuthError.Field.EMAIL, detailMsg)
                 );
             }
         } catch (IOException e) {
@@ -552,7 +651,57 @@ public final class AuthRepository {
         }
     }
 
+    @NonNull
+    private AuthSession verifySessionWithBackendMe(@NonNull AuthSession session) {
+        try {
+            FuelogBackendApiClient.MeResponse me =
+                    FuelogBackendApiClient.getInstance(this).fetchAuthMeWithToken(session.getAccessToken());
+            if (me != null && me.userId != null && !me.userId.isEmpty()) {
+                SafeLogger.i("백엔드 GET /auth/me 검증 성공: user_id=" + me.userId + ", role=" + me.role);
+                return new AuthSession(
+                        me.userId,
+                        (me.email != null && !me.email.isEmpty()) ? me.email : session.getEmail(),
+                        session.getAccessToken(),
+                        session.getRefreshToken(),
+                        session.getExpiresAtEpochSeconds(),
+                        session.isTermsAccepted()
+                );
+            }
+        } catch (Exception e) {
+            SafeLogger.w("백엔드 /auth/me 검증 중 예외(세션은 유지): " + e.getMessage());
+        }
+        return session;
+    }
+
     private boolean fetchRemoteHasVehicle(String accessToken, String userId) {
+        try {
+            saveSessionToPrefs(new AuthSession(userId, "", accessToken, "", (System.currentTimeMillis() / 1000L) + 3600L, true));
+            FuelogBackendApiClient client = FuelogBackendApiClient.getInstance(this);
+
+            // 1) 저장된 설치 자격 증명이 있으면 백엔드 GET /installations/me 및 GET /vehicle/home 조회
+            String instId = userCacheManager.getInstallationId(userId);
+            String instSecret = userCacheManager.getInstallationSecret(userId);
+            if (instId != null && instSecret != null) {
+                FuelogBackendApiClient.InstallationMeResponse instMe = client.fetchInstallationMe(instId, instSecret);
+                if (instMe != null && instMe.paired && instMe.vehicleId != null) {
+                    userCacheManager.setRegisteredVehicleUuid(userId, instMe.vehicleId);
+                    FuelogBackendApiClient.VehicleHomeResponse home = client.fetchVehicleHome(instSecret, userCacheManager.getActiveScopedToken());
+                    if (home.success && home.vehicleAlias != null && !home.vehicleAlias.isEmpty()) {
+                        userCacheManager.setRegisteredVehicleForUser(userId, home.vehicleAlias);
+                    }
+                    return true;
+                }
+            }
+
+            // 2) 백엔드 GET /mobile/inbox 조회로 귀속된 운행/차량 내역 존재 여부 확인
+            FuelogBackendApiClient.InboxPageResponse inbox = client.fetchMobileInbox(0L);
+            if (inbox.success && inbox.items != null && !inbox.items.isEmpty()) {
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+
+        // 3) Supabase REST /rest/v1/vehicles 확인
         HttpURLConnection conn = null;
         try {
             String baseUrl = stripTrailingSlash(BuildConfig.SUPABASE_URL);
@@ -580,9 +729,62 @@ public final class AuthRepository {
         return userCacheManager.hasRegisteredVehicle(userId);
     }
 
+    @Nullable
+    private AuthSession refreshRemoteSupabaseSession(
+            @NonNull String refreshToken,
+            @NonNull String fallbackEmail,
+            boolean termsAccepted
+    ) {
+        HttpURLConnection conn = null;
+        try {
+            String baseUrl = stripTrailingSlash(BuildConfig.SUPABASE_URL);
+            URL url = new URL(baseUrl + "/auth/v1/token?grant_type=refresh_token");
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+            conn.setRequestProperty("apikey", BuildConfig.SUPABASE_ANON_KEY);
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            conn.setDoOutput(true);
+
+            JSONObject payload = new JSONObject();
+            payload.put("refresh_token", refreshToken);
+            writeRequestBody(conn, payload.toString());
+
+            int status = conn.getResponseCode();
+            if (status >= 200 && status < 300) {
+                String body = readResponseBody(conn, false);
+                AuthSession refreshed = parseSupabaseSession(body, fallbackEmail);
+                if (refreshed != null) {
+                    return new AuthSession(
+                            refreshed.getUserId(),
+                            refreshed.getEmail(),
+                            refreshed.getAccessToken(),
+                            refreshed.getRefreshToken(),
+                            refreshed.getExpiresAtEpochSeconds(),
+                            termsAccepted
+                    );
+                }
+            }
+        } catch (Exception e) {
+            SafeLogger.w("JWT refresh_token 갱신 실패: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
+        return null;
+    }
+
+    @Nullable
     private AuthSession parseSupabaseSession(String jsonBody, String fallbackEmail) throws Exception {
         JSONObject root = new JSONObject(jsonBody);
-        String accessToken = root.optString("access_token", "supabase_session_" + UUID.randomUUID());
+        String accessToken = root.optString("access_token", "").trim();
+        if (accessToken.isEmpty()) {
+            // Confirm email 활성화 상태에서 /auth/v1/signup 응답에는 access_token(JWT)이 없으므로
+            // 가짜 토큰을 생성하지 않고 null을 반환한다.
+            return null;
+        }
         String refreshToken = root.optString("refresh_token", "");
         long expiresIn = root.optLong("expires_in", 3600L);
         long expiresAt = root.optLong("expires_at", (System.currentTimeMillis() / 1000L) + expiresIn);
@@ -594,7 +796,6 @@ public final class AuthRepository {
             userId = userObj.optString("id", "user_" + Math.abs(fallbackEmail.hashCode()));
             email = userObj.optString("email", fallbackEmail);
         } else {
-            // Confirm email 활성화 상태에서 /auth/v1/signup 응답은 루트에 id, email이 위치함
             userId = root.optString("id", "user_" + Math.abs(fallbackEmail.hashCode()));
             email = root.optString("email", fallbackEmail);
         }
@@ -623,13 +824,17 @@ public final class AuthRepository {
         return defaultMsg;
     }
 
-    private synchronized AuthResult finalizeAuthenticatedSession(@NonNull AuthSession session) {
+    private synchronized void saveSessionToPrefs(@NonNull AuthSession session) {
         putPref(KEY_USER_ID, session.getUserId());
         putPref(KEY_EMAIL, session.getEmail());
         putPref(KEY_ACCESS_TOKEN, session.getAccessToken());
         putPref(KEY_REFRESH_TOKEN, session.getRefreshToken());
         putPref(KEY_EXPIRES_AT, Long.toString(session.getExpiresAtEpochSeconds()));
         putPref(KEY_TERMS_ACCEPTED, Boolean.toString(session.isTermsAccepted()));
+    }
+
+    private synchronized AuthResult finalizeAuthenticatedSession(@NonNull AuthSession session) {
+        saveSessionToPrefs(session);
 
         boolean previousAccountCacheHidden =
                 userCacheManager.onUserAuthenticated(session.getUserId(), session.getEmail());

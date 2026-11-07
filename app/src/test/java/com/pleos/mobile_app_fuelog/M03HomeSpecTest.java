@@ -6,11 +6,13 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import com.pleos.mobile_app_fuelog.data.home.ExpenseRecord;
 import com.pleos.mobile_app_fuelog.data.home.M03HomeRepository;
 import com.pleos.mobile_app_fuelog.data.home.MaintenanceScheduleItem;
 import com.pleos.mobile_app_fuelog.data.home.MonthlyExpenseSummary;
 import com.pleos.mobile_app_fuelog.data.home.PendingTaskItem;
 import com.pleos.mobile_app_fuelog.data.home.TripRecord;
+import com.pleos.mobile_app_fuelog.data.home.VehicleProfile;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -18,7 +20,7 @@ import org.junit.Test;
 import java.util.List;
 
 /**
- * M03. 홈 요구사항(FR-M03-1 ~ FR-M03-3 및 예외/완료) 단위 테스트.
+ * M03. 홈 요구사항(FR-M03-1 ~ FR-M03-3 및 예외/완료) 단위 테스트 (하드코딩 시드 없이 동적 DB/API 레코드 주입 검증).
  */
 public class M03HomeSpecTest {
 
@@ -27,6 +29,42 @@ public class M03HomeSpecTest {
     @Before
     public void setUp() {
         repository = new M03HomeRepository();
+        // 프로덕션 초기 상태에는 하드코딩된 데이터가 없어야 함
+        assertTrue(repository.getVehicles().isEmpty());
+
+        // 테스트용 차량 2대 및 DB 레코드 주입
+        repository.registerOrUpdateVehicle(new VehicleProfile(
+                M03HomeRepository.VEHICLE_ID_PRIMARY,
+                "12가 3456",
+                "휘발유",
+                "12가 3456 (휘발유)",
+                true
+        ));
+        repository.registerOrUpdateVehicle(new VehicleProfile(
+                M03HomeRepository.VEHICLE_ID_SECONDARY,
+                "88하 9012",
+                "경유",
+                "88하 9012 (경유)",
+                false
+        ));
+
+        repository.addPendingTask(new PendingTaskItem("t1", M03HomeRepository.VEHICLE_ID_PRIMARY, PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM, "주유 확인", "상세", 68000L));
+        repository.addPendingTask(new PendingTaskItem("t2", M03HomeRepository.VEHICLE_ID_PRIMARY, PendingTaskItem.TaskDestination.M04_TRIP_ATTRIBUTION, "운행 귀속", "상세", 0L));
+        repository.addPendingTask(new PendingTaskItem("t3", M03HomeRepository.VEHICLE_ID_PRIMARY, PendingTaskItem.TaskDestination.M09_SETTLEMENT_CHANGE, "정산 변경", "상세", 45000L));
+        repository.addPendingTask(new PendingTaskItem("t4", M03HomeRepository.VEHICLE_ID_PRIMARY, PendingTaskItem.TaskDestination.M13_SHARE_MANAGEMENT, "공동 관리", "상세", 0L));
+
+        repository.addExpenseRecord(new ExpenseRecord("e1", M03HomeRepository.VEHICLE_ID_PRIMARY, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.MY_RECORD, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "주유", "11.01", 72000L));
+        repository.addExpenseRecord(new ExpenseRecord("e2", M03HomeRepository.VEHICLE_ID_PRIMARY, ExpenseRecord.Category.MAINTENANCE, ExpenseRecord.Ownership.EXPLICITLY_SHARED, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "정비", "11.02", 58000L));
+        repository.addExpenseRecord(new ExpenseRecord("e3", M03HomeRepository.VEHICLE_ID_PRIMARY, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.MY_RECORD, ExpenseRecord.ConfirmationState.UNCONFIRMED_ESTIMATE, "미확인 주유", "11.03", 68000L));
+        repository.addExpenseRecord(new ExpenseRecord("e4", M03HomeRepository.VEHICLE_ID_PRIMARY, ExpenseRecord.Category.TRIP_CONSUMPTION_ESTIMATE, ExpenseRecord.Ownership.MY_RECORD, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "운행 소비", "11.03", 4400L));
+        repository.addExpenseRecord(new ExpenseRecord("e5", M03HomeRepository.VEHICLE_ID_PRIMARY, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.UNSHARED_OTHER, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "타인 비공유", "11.02", 99000L));
+
+        // 차량 2 데이터
+        repository.addPendingTask(new PendingTaskItem("sec_t1", M03HomeRepository.VEHICLE_ID_SECONDARY, PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM, "세컨드카 주유", "상세", 54000L));
+        repository.addTripRecord(new TripRecord("sec_tr1", M03HomeRepository.VEHICLE_ID_SECONDARY, "11.01", "광교 -> 송도", 42.5, 52, "본인", 4800L, ExpenseRecord.Ownership.MY_RECORD));
+        repository.addExpenseRecord(new ExpenseRecord("sec_e1", M03HomeRepository.VEHICLE_ID_SECONDARY, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.MY_RECORD, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "경유", "11.01", 51000L));
+        repository.addExpenseRecord(new ExpenseRecord("sec_e2", M03HomeRepository.VEHICLE_ID_SECONDARY, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.MY_RECORD, ExpenseRecord.ConfirmationState.UNCONFIRMED_ESTIMATE, "미확인 경유", "11.02", 54000L));
+        repository.addMaintenanceScheduleItem(new MaintenanceScheduleItem("sec_m1", M03HomeRepository.VEHICLE_ID_SECONDARY, "요소수", "점검", "450km", true));
     }
 
     @Test
@@ -41,11 +79,6 @@ public class M03HomeSpecTest {
 
     @Test
     public void frM03_2_and_frM03_3_aggregatesOnlyAllowedScope_andSeparatesUnconfirmed_withoutDoubleCountingTripCost() {
-        // 1) 기본 범위: 개인 + 차량 공동(명시적 공유 포함)
-        // - 본인 확인 주유 72,000 + 명시적 공유 확인 정비 58,000 = 130,000원
-        // - 비공유 타인 주유(99,000원)는 제외되어야 함 (FR-M03-2)
-        // - 미확인 추정 주유(68,000원, 1건)는 별도 집계되어야 함 (FR-M03-3)
-        // - 운행 소비 추정 비용(4,400원)은 월 지출 합계에 중복 합산되면 안 됨 (FR-M03-3)
         repository.setCurrentScopeMode(MonthlyExpenseSummary.ScopeMode.PERSONAL_AND_SHARED);
         MonthlyExpenseSummary combined = repository.getMonthlyExpenseSummaryForSelectedVehicle();
 
@@ -57,7 +90,6 @@ public class M03HomeSpecTest {
         assertEquals(68000L, combined.getUnconfirmedEstimatedWon());
         assertEquals(4400L, combined.getExcludedTripConsumptionWon());
 
-        // 2) 개인 지출만 보기 (본인 기록만 집계, 명시적 공유 58,000원 제외)
         repository.setCurrentScopeMode(MonthlyExpenseSummary.ScopeMode.PERSONAL_ONLY);
         MonthlyExpenseSummary personalOnly = repository.getMonthlyExpenseSummaryForSelectedVehicle();
 
@@ -69,7 +101,6 @@ public class M03HomeSpecTest {
 
     @Test
     public void exceptionAndCompletion_switchingVehicleIsolatesData_andSupportsEmptyAndOfflineStates() {
-        // 차량 2(88하 9012 경유)로 전환 시 차량 1의 데이터가 전혀 섞이지 않아야 함
         repository.selectVehicle(M03HomeRepository.VEHICLE_ID_SECONDARY);
 
         List<PendingTaskItem> secTasks = repository.getPendingTasksForSelectedVehicle();
@@ -89,12 +120,10 @@ public class M03HomeSpecTest {
         assertEquals(1, secMaint.size());
         assertEquals(M03HomeRepository.VEHICLE_ID_SECONDARY, secMaint.get(0).getVehicleId());
 
-        // 신규 사용자 빈 상태 확인
         repository.setNewUserEmptyMode(true);
         assertNull(repository.getSelectedVehicle());
         assertTrue(repository.getPendingTasksForSelectedVehicle().isEmpty());
 
-        // 오프라인 모드 및 마지막 갱신 시각 확인
         repository.setOfflineMode(true);
         assertTrue(repository.isOfflineMode());
         assertNotNull(repository.getLastSyncedTimestamp());

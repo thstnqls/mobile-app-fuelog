@@ -36,6 +36,9 @@ public class M01LoginSpecTest {
         SafeLogger.clearRecentLogs();
         cacheManager = new UserCacheManager(null);
         authRepository = new AuthRepository(null, cacheManager);
+        authRepository.registerLocalAccountForTest("car@fuelog.com", "fuelog1234", "user_with_car");
+        authRepository.registerLocalAccountForTest("new@fuelog.com", "fuelog1234", "user_no_car");
+        cacheManager.setRegisteredVehicleForUser("user_with_car", "아이오닉 6 롱레인지 (12가 3456)");
         deepLinkRouter = new DeepLinkRouter();
     }
 
@@ -190,11 +193,11 @@ public class M01LoginSpecTest {
     }
 
     @Test
-    public void m02PlateNumberNormalization_validatesAndFormatsKoreanPlates() {
-        assertEquals("12가 3456", com.pleos.mobile_app_fuelog.ui.onboarding.M02NoVehicleFragment.normalizeKoreanPlateNumber("12가3456"));
-        assertEquals("123나 4567", com.pleos.mobile_app_fuelog.ui.onboarding.M02NoVehicleFragment.normalizeKoreanPlateNumber(" 123나  4567 "));
-        assertEquals("서울12다 3456", com.pleos.mobile_app_fuelog.ui.onboarding.M02NoVehicleFragment.normalizeKoreanPlateNumber("서울12다3456"));
-        assertNull(com.pleos.mobile_app_fuelog.ui.onboarding.M02NoVehicleFragment.normalizeKoreanPlateNumber("invalid-plate"));
-        assertNull(com.pleos.mobile_app_fuelog.ui.onboarding.M02NoVehicleFragment.normalizeKoreanPlateNumber("1234567"));
+    public void m02QrVehicleRegistration_linksVehicleToAccountInCache() {
+        assertFalse(cacheManager.hasRegisteredVehicle("user_no_car"));
+        cacheManager.setRegisteredVehicleUuid("user_no_car", "veh-uuid-qr-01");
+        cacheManager.setRegisteredVehicleForUser("user_no_car", "QR 연동 차량");
+        assertTrue(cacheManager.hasRegisteredVehicle("user_no_car"));
+        assertEquals("veh-uuid-qr-01", cacheManager.getRegisteredVehicleUuid("user_no_car"));
     }
 }
