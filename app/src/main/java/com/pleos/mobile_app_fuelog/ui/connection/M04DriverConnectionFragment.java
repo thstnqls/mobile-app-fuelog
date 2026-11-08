@@ -51,13 +51,6 @@ public class M04DriverConnectionFragment extends Fragment {
     private M04DriverConnectionCoordinator coordinator;
     private M03HomeRepository homeRepository;
 
-    private final ActivityResultLauncher<ScanOptions> qrScanLauncher =
-            registerForActivityResult(new ScanContract(), result -> {
-                if (result.getContents() != null && !result.getContents().trim().isEmpty()) {
-                    executeQrAuthenticationFlow(result.getContents().trim());
-                }
-            });
-
     @Override
     public View onCreateView(
             @NonNull LayoutInflater inflater,
@@ -227,22 +220,14 @@ public class M04DriverConnectionFragment extends Fragment {
             renderState();
 
             new MaterialAlertDialogBuilder(requireContext())
-                    .setTitle("차량(C03) QR 코드 스캔 / 온라인 확인")
-                    .setMessage("차량(Pleos C03) 화면에 표시된 QR 코드를 카메라로 스캔하거나 온라인 확인을 진행하면 이번 운행 사용자로 연결됩니다.\n\n"
+                    .setTitle("앱 내 차량(C03) QR 코드 인식 / 온라인 확인")
+                    .setMessage("외부 카메라 액티비티 이동 없이 앱 내에서 차량(Pleos C03) QR 코드 및 온라인 인증을 확인합니다.\n\n"
                             + "• 단기 증명 코드: " + (proof != null ? proof.getProofId() : "-") + "\n"
                             + "• 페이로드:\n" + qrPayload)
-                    .setPositiveButton("차량 C03 온라인 확인 완료", (d, w) -> {
+                    .setPositiveButton("앱 내 C03 QR 인식 · 확인 완료", (d, w) -> {
                         if (proof != null) {
                             executeQrAuthenticationFlow(null);
                         }
-                    })
-                    .setNeutralButton("카메라로 QR 스캔", (d, w) -> {
-                        ScanOptions options = new ScanOptions();
-                        options.setDesiredBarcodeFormats(ScanOptions.QR_CODE);
-                        options.setPrompt("차량(C03) 운행 사용자 확인 QR 코드를 스캔하세요");
-                        options.setBeepEnabled(false);
-                        options.setOrientationLocked(false);
-                        qrScanLauncher.launch(options);
                     })
                     .setNegativeButton("닫기", null)
                     .show();

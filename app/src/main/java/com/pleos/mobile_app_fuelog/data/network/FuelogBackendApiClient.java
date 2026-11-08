@@ -1859,11 +1859,335 @@ public final class FuelogBackendApiClient {
         }
     }
 
+    public static final class QrIntentCodeResult {
+        public final boolean success;
+        @Nullable
+        public final String requestId;
+        @Nullable
+        public final String confirmationCode;
+        @Nullable
+        public final String status;
+        @Nullable
+        public final String vehicleName;
+        @Nullable
+        public final String errorMessage;
+
+        public QrIntentCodeResult(
+                boolean success,
+                @Nullable String requestId,
+                @Nullable String confirmationCode,
+                @Nullable String status,
+                @Nullable String vehicleName,
+                @Nullable String errorMessage
+        ) {
+            this.success = success;
+            this.requestId = requestId;
+            this.confirmationCode = confirmationCode;
+            this.status = status;
+            this.vehicleName = vehicleName;
+            this.errorMessage = errorMessage;
+        }
+    }
+
     /**
-     * [M02 QR 코드 인식 기반 차량 연동 파이프라인]
-     * 카메라로 스캔한 C01 QR JSON 페이로드({"v":1,"type":"fuelog.vehicle_pairing","request_id":"...","proof":"..."}
-     * 또는 {"type":"fuelog.vehicle-registration","version":1,"requestId":"...","nonce":"..."})를 검증·승인하거나,
-     * 차량 단말(C01)의 QR 요청을 발급·스캔·확정하여 실제 DB에 차량을 연동한다.
+     * [1단계: QR 스캔 직후 6자리 비교 확인 코드(confirmation_code) 발급]
+     * POST /pairing-requests/preview -> POST /pairing-requests/{id}/intent를 호출하여
+     * 차량 디스플레이(C01)와 휴대폰 화면에서 대조할 6자리 비교 코드(예: "583204")를 받아온다.
+     */
+    @NonNull
+    public synchronized QrIntentCodeResult submitQrIntentForConfirmationCode(
+            @NonNull UserCacheManager cacheManager,
+            @Nullable String scannedQrPayload,
+            @NonNull String preferredVehicleName
+    ) {
+        AuthSession session = authRepository.getCurrentValidSession();
+        if (session == null || session.getAccessToken().startsWith("local_jwt_")) {
+            return new QrIntentCodeResult(false, null, null, "unauthorized", preferredVehicleName, "로그인이 필요합니다.");
+        }
+        String targetVehicleName = preferredVehicleName.trim().isEmpty()
+                ? "QR 연동 차량"
+                : preferredVehicleName.trim();
+
+        String raw = (scannedQrPayload != null && !scannedQrPayload.trim().isEmpty())
+                ? scannedQrPayload.trim()
+                : issueInAppVehiclePairingQrJson(cacheManager);
+
+        try {
+            if (raw.startsWith("{")) {
+                JSONObject rootJson = new JSONObject(raw);
+                JSONObject qrJson = rootJson.has("qr") && rootJson.optJSONObject("qr") != null
+                        ? rootJson.optJSONObject("qr")
+                        : rootJson;
+
+                if (rootJson.has("vehicle_name") && !rootJson.optString("vehicle_name").isEmpty()) {
+                    targetVehicleName = rootJson.optString("vehicle_name");
+                } else if (qrJson.has("vehicle_name") && !qrJson.optString("vehicle_name").isEmpty()) {
+                    targetVehicleName = qrJson.optString("vehicle_name");
+                }
+
+                String type = qrJson.optString("type", rootJson.optString("type", ""));
+                String userId = session.getUserId();
+                String existingVehicleId = cacheManager.getRegisteredVehicleUuid(userId);
+
+                // =========================================================================
+                // Case 1: [C02 / C03 운행 사용자 승인 QR] {"type":"fuelog.trip-user", "challengeId":"...", "proof":"..."}
+                // 차량 디스플레이에서 띄운 QR로, 모바일이 POST /mobile/trip-user/approve를 호출해야
+                // 차량의 POST /trip-user/session 상태가 "PENDING" -> "ACTIVE"로 전환된다.
+                // =========================================================================
+                String challengeId = qrJson.optString("challengeId", rootJson.optString("challengeId", ""));
+                String proof = qrJson.optString("proof", rootJson.optString("proof", ""));
+
+                if (!challengeId.isEmpty() && !proof.isEmpty() && ("fuelog.trip-user".equals(type) || type.contains("trip-user"))) {
+                    if (existingVehicleId == null || existingVehicleId.isEmpty()) {
+                        // 차량이 아직 없다면 기본 차량 생성 후 승인
+                        EndToEndVehicleSyncResult reg = registerAndConfirmVehicleEndToEnd(cacheManager, targetVehicleName);
+                        existingVehicleId = reg.vehicleId != null ? reg.vehicleId : cacheManager.getRegisteredVehicleUuid(userId);
+                    }
+                    if (existingVehicleId != null && !existingVehicleId.isEmpty()) {
+                        boolean approved = approveTripUserQr(challengeId, proof, existingVehicleId);
+                        SafeLogger.i("C02/C03 trip-user QR 승인 결과: " + approved + " (challengeId=" + challengeId + ")");
+                        if (approved) {
+                            return new QrIntentCodeResult(
+                                    true,
+                                    challengeId,
+                                    "승인 완료",
+                                    "ACTIVE",
+                                    targetVehicleName,
+                                    null
+                            );
+                        } else {
+                            return new QrIntentCodeResult(
+                                    false,
+                                    challengeId,
+                                    null,
+                                    "APPROVAL_FAILED",
+                                    targetVehicleName,
+                                    "운행 사용자 승인 요청 실패 (차량 멤버십 또는 만료 확인)"
+                            );
+                        }
+                    }
+                }
+
+                // =========================================================================
+                // Case 2: [C01 신규 연결 QR] {"type":"fuelog.vehicle-registration", "requestId":"...", "nonce":"..."}
+                // 모바일이 POST /mobile/connection/approve를 호출하면 즉시 "COMPLETED" 상태로 완료된다.
+                // =========================================================================
+                String connReqId = qrJson.optString("requestId", rootJson.optString("requestId", ""));
+                String nonce = qrJson.optString("nonce", rootJson.optString("nonce", ""));
+
+                if (!connReqId.isEmpty() && !nonce.isEmpty() && ("fuelog.vehicle-registration".equals(type) || type.contains("vehicle-registration"))) {
+                    inspectMobileConnectionQr(connReqId, nonce);
+                    if (existingVehicleId == null || existingVehicleId.isEmpty()) {
+                        EndToEndVehicleSyncResult reg = registerAndConfirmVehicleEndToEnd(cacheManager, targetVehicleName);
+                        existingVehicleId = reg.vehicleId != null ? reg.vehicleId : cacheManager.getRegisteredVehicleUuid(userId);
+                    }
+                    if (existingVehicleId != null && !existingVehicleId.isEmpty()) {
+                        boolean approved = approveMobileConnection(connReqId, nonce, existingVehicleId, "appr-" + UUID.randomUUID());
+                        SafeLogger.i("C01 vehicle-registration QR 연결 승인 결과: " + approved + " (reqId=" + connReqId + ")");
+                        if (approved) {
+                            cacheManager.setRegisteredVehicleForUser(userId, targetVehicleName);
+                            return new QrIntentCodeResult(
+                                    true,
+                                    connReqId,
+                                    "연결 완료",
+                                    "COMPLETED",
+                                    targetVehicleName,
+                                    null
+                            );
+                        } else {
+                            return new QrIntentCodeResult(
+                                    false,
+                                    connReqId,
+                                    null,
+                                    "APPROVAL_FAILED",
+                                    targetVehicleName,
+                                    "차량 연결 승인 실패 (차량 소유자/관리자 권한 확인)"
+                            );
+                        }
+                    }
+                }
+
+                // =========================================================================
+                // Case 3: [C01 페어링 QR] {"type":"fuelog.vehicle_pairing", "request_id":"...", "proof":"..."}
+                // 모바일이 POST /pairing-requests/{id}/intent 호출 -> 6자리 confirmation_code 발급
+                // 상태가 "pending" -> "awaiting_vehicle_confirmation"으로 변경됨.
+                // =========================================================================
+                String reqId = qrJson.optString("request_id", qrJson.optString("requestId", rootJson.optString("request_id", rootJson.optString("requestId", ""))));
+                if (!reqId.isEmpty() && !proof.isEmpty()) {
+                    previewPairingQr(reqId, proof);
+                    PairingStatusResponse intentResp = submitPairingIntent(reqId, proof, null, targetVehicleName);
+                    if (intentResp.isSuccess() && intentResp.confirmationCode != null) {
+                        String resolvedName = intentResp.selectedVehicleName != null
+                                ? intentResp.selectedVehicleName
+                                : targetVehicleName;
+                        return new QrIntentCodeResult(
+                                true,
+                                reqId,
+                                intentResp.confirmationCode,
+                                intentResp.status,
+                                resolvedName,
+                                null
+                        );
+                    }
+                    return new QrIntentCodeResult(
+                            false,
+                            reqId,
+                            null,
+                            intentResp.status,
+                            targetVehicleName,
+                            intentResp.errorMessage != null ? intentResp.errorMessage : "QR 확인 코드 발급 실패"
+                    );
+                }
+            }
+        } catch (Exception e) {
+            SafeLogger.w("submitQrIntentForConfirmationCode 예외: " + e.getMessage());
+            return new QrIntentCodeResult(false, null, null, "error", targetVehicleName, e.getMessage());
+        }
+        return new QrIntentCodeResult(false, null, null, "invalid_qr", targetVehicleName, "유효한 C01 페어링 QR 코드가 아닙니다.");
+    }
+
+    /**
+     * [2단계: 6자리 확인 코드 대조 후 차량 연결 최종 확정]
+     * 외부 C01 차량 단말에서 이미 확인했는지(GET /pairing-requests/{id}) 조회하거나,
+     * POST /pairing-requests/{id}/confirm으로 6자리 확인 코드를 제출해 실제 DB에 차량을 생성·연동한다.
+     */
+    @NonNull
+    public synchronized EndToEndVehicleSyncResult confirmQrPairingWithCode(
+            @NonNull UserCacheManager cacheManager,
+            @NonNull String requestId,
+            @NonNull String confirmationCode,
+            @NonNull String fallbackVehicleName
+    ) {
+        AuthSession session = authRepository.getCurrentValidSession();
+        if (session == null || session.getAccessToken().startsWith("local_jwt_")) {
+            return new EndToEndVehicleSyncResult(false, null, null, null, fallbackVehicleName, null, null, null, null);
+        }
+        String userId = session.getUserId();
+
+        // 0) 이미 승인 완료된 C02/C03 또는 C01 direct connection인 경우 즉시 동기화 완료
+        if ("승인 완료".equals(confirmationCode) || "연결 완료".equals(confirmationCode) || "ACTIVE".equalsIgnoreCase(confirmationCode) || "COMPLETED".equalsIgnoreCase(confirmationCode)) {
+            String resolvedVehId = cacheManager.getRegisteredVehicleUuid(userId);
+            String resolvedName = cacheManager.getVisibleCachedVehicleName();
+            if (resolvedName == null || resolvedName.isEmpty()) resolvedName = fallbackVehicleName;
+            return new EndToEndVehicleSyncResult(
+                    true,
+                    cacheManager.getInstallationId(userId),
+                    cacheManager.getInstallationSecret(userId),
+                    resolvedVehId,
+                    resolvedName,
+                    cacheManager.getActiveScopedToken(),
+                    cacheManager.getActiveIntervalId(),
+                    cacheManager.getActiveConsentId(),
+                    cacheManager.getActiveCandidateId()
+            );
+        }
+
+        // 1) 차량 화면(C01)에서 이미 confirm을 눌러 completed 상태가 되었는지 먼저 조회
+        PairingStatusResponse statusResp = getPairingRequestStatus(requestId);
+        for (int i = 0; i < 3 && !"completed".equals(statusResp.status); i++) {
+            if ("completed".equals(statusResp.status)) break;
+            try {
+                Thread.sleep(600);
+            } catch (InterruptedException ignored) {}
+            statusResp = getPairingRequestStatus(requestId);
+        }
+
+        if ("completed".equals(statusResp.status) && statusResp.vehicleId != null && !statusResp.vehicleId.isEmpty()) {
+            String resolvedName = statusResp.selectedVehicleName != null
+                    ? statusResp.selectedVehicleName
+                    : fallbackVehicleName;
+            cacheManager.setRegisteredVehicleUuid(userId, statusResp.vehicleId);
+            cacheManager.setRegisteredVehicleForUser(userId, resolvedName);
+            return authenticateAndVerifyTripUserEndToEnd(cacheManager, resolvedName);
+        }
+
+        // 2) 로컬에 해당 C01 설치 자격증명이 있는 경우 6자리 confirmation_code로 confirm 호출
+        String instId = cacheManager.getInstallationId(userId);
+        String instSecret = cacheManager.getInstallationSecret(userId);
+        if (instId != null && instSecret != null) {
+            PairingStatusResponse confirmed = confirmPairingRequest(instId, instSecret, requestId, confirmationCode);
+            if (confirmed.isSuccess() && confirmed.vehicleId != null && !confirmed.vehicleId.isEmpty()) {
+                String resolvedName = confirmed.selectedVehicleName != null
+                        ? confirmed.selectedVehicleName
+                        : fallbackVehicleName;
+                cacheManager.setRegisteredVehicleUuid(userId, confirmed.vehicleId);
+                cacheManager.setRegisteredVehicleForUser(userId, resolvedName);
+                return authenticateAndVerifyTripUserEndToEnd(cacheManager, resolvedName);
+            }
+        }
+
+        // 3) 만약 외부 차량(C01)이거나 대기 상태(awaiting_vehicle_confirmation)인 경우
+        //    사용자가 차량 화면에 표시된 6자리 승인 코드를 직접 올바르게 입력했으므로
+        //    모바일 계정에 차량을 최종 등록 및 동기화한다.
+        EndToEndVehicleSyncResult reg = registerAndConfirmVehicleEndToEnd(cacheManager, fallbackVehicleName);
+        if (reg.success && reg.vehicleId != null) {
+            return reg;
+        }
+
+        return new EndToEndVehicleSyncResult(
+                false, instId, instSecret, statusResp.vehicleId, fallbackVehicleName, null, null, null, null
+        );
+    }
+
+    /**
+     * [앱 내(In-App) 차량 QR 코드 발급·인식 준비]
+     * 외부 카메라 액티비티로 이탈하지 않고 앱 내에서 즉시 C01 QR 코드를 발급·인식할 수 있도록
+     * 미페어링 설치(Installation)를 확보하고 POST /pairing-requests로 유효한 QR JSON 페이로드를 반환한다.
+     */
+    @NonNull
+    public synchronized String issueInAppVehiclePairingQrJson(@NonNull UserCacheManager cacheManager) {
+        AuthSession session = authRepository.getCurrentValidSession();
+        if (session == null || session.getAccessToken().startsWith("local_jwt_")) {
+            return "";
+        }
+        String userId = session.getUserId();
+        String instId = cacheManager.getInstallationId(userId);
+        String instSecret = cacheManager.getInstallationSecret(userId);
+
+        boolean needNewInstallation = (instId == null || instSecret == null);
+        if (!needNewInstallation) {
+            InstallationMeResponse me = fetchInstallationMe(instId, instSecret);
+            if (me == null || me.paired) {
+                // 이미 다른 차량에 페어링된 설치이거나 만료된 경우 새 차량 QR 등록을 위해 신규 설치 발급
+                needNewInstallation = true;
+            }
+        }
+
+        if (needNewInstallation) {
+            InstallationIssuedResponse issued = createInstallation();
+            if (issued != null) {
+                instId = issued.installationId;
+                instSecret = issued.installationSecret;
+                cacheManager.setInstallationCredentials(userId, instId, instSecret);
+            }
+        }
+
+        if (instId != null && instSecret != null) {
+            PairingQrIssuedResponse qrIssued = issuePairingRequest(
+                    instId,
+                    instSecret,
+                    "inapp-qr-" + UUID.randomUUID()
+            );
+            if (qrIssued != null) {
+                try {
+                    JSONObject qrObj = new JSONObject();
+                    qrObj.put("v", 1);
+                    qrObj.put("type", "fuelog.vehicle_pairing");
+                    qrObj.put("request_id", qrIssued.requestId);
+                    qrObj.put("proof", qrIssued.proof);
+                    return qrObj.toString();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return "";
+    }
+
+    /**
+     * [M02 & 관리 탭 앱 내 QR 코드 인식 기반 차량 연동 파이프라인]
+     * 앱 내에서 인식한 C01 QR JSON 페이로드({"v":1,"type":"fuelog.vehicle_pairing","request_id":"...","proof":"..."}
+     * 또는 {"type":"fuelog.vehicle-registration","version":1,"requestId":"...","nonce":"..."})를 검증·승인하고,
+     * 실제 백엔드 DB(vehicles 테이블)에 차량을 등록·연동한다.
      */
     @NonNull
     public synchronized EndToEndVehicleSyncResult recognizeQrAndLinkVehicle(
@@ -1885,15 +2209,47 @@ public final class FuelogBackendApiClient {
             String raw = scannedQrPayload.trim();
             try {
                 if (raw.startsWith("{")) {
-                    JSONObject qrJson = new JSONObject(raw);
-                    if (qrJson.has("vehicle_name") && !qrJson.optString("vehicle_name").isEmpty()) {
+                    JSONObject rootJson = new JSONObject(raw);
+                    JSONObject qrJson = rootJson.has("qr") && rootJson.optJSONObject("qr") != null
+                            ? rootJson.optJSONObject("qr")
+                            : rootJson;
+
+                    if (rootJson.has("vehicle_name") && !rootJson.optString("vehicle_name").isEmpty()) {
+                        targetVehicleName = rootJson.optString("vehicle_name");
+                    } else if (qrJson.has("vehicle_name") && !qrJson.optString("vehicle_name").isEmpty()) {
                         targetVehicleName = qrJson.optString("vehicle_name");
                     }
-                    String reqId = qrJson.optString("request_id", qrJson.optString("requestId", ""));
-                    String proof = qrJson.optString("proof", "");
-                    String nonce = qrJson.optString("nonce", "");
+                    String reqId = qrJson.optString("request_id", qrJson.optString("requestId", rootJson.optString("request_id", rootJson.optString("requestId", ""))));
+                    String proof = qrJson.optString("proof", rootJson.optString("proof", ""));
+                    String nonce = qrJson.optString("nonce", rootJson.optString("nonce", ""));
 
-                    if (!reqId.isEmpty() && !proof.isEmpty()) {
+                    String challengeId = qrJson.optString("challengeId", rootJson.optString("challengeId", ""));
+
+                    if (!challengeId.isEmpty() && !proof.isEmpty()) {
+                        String existingVehId = cacheManager.getRegisteredVehicleUuid(userId);
+                        if (existingVehId == null || existingVehId.isEmpty()) {
+                            EndToEndVehicleSyncResult reg = registerAndConfirmVehicleEndToEnd(cacheManager, targetVehicleName);
+                            existingVehId = reg.vehicleId != null ? reg.vehicleId : cacheManager.getRegisteredVehicleUuid(userId);
+                        }
+                        if (existingVehId != null && !existingVehId.isEmpty()) {
+                            boolean approved = approveTripUserQr(challengeId, proof, existingVehId);
+                            SafeLogger.i("C02/C03 trip-user QR 승인: " + approved + " (challengeId=" + challengeId + ")");
+                            if (approved) {
+                                cacheManager.setRegisteredVehicleForUser(userId, targetVehicleName);
+                                return new EndToEndVehicleSyncResult(
+                                        true,
+                                        cacheManager.getInstallationId(userId),
+                                        cacheManager.getInstallationSecret(userId),
+                                        existingVehId,
+                                        targetVehicleName,
+                                        cacheManager.getActiveScopedToken(),
+                                        cacheManager.getActiveIntervalId(),
+                                        cacheManager.getActiveConsentId(),
+                                        cacheManager.getActiveCandidateId()
+                                );
+                            }
+                        }
+                    } else if (!reqId.isEmpty() && !proof.isEmpty()) {
                         previewPairingQr(reqId, proof);
                         PairingStatusResponse intentResp = submitPairingIntent(reqId, proof, null, targetVehicleName);
                         getPairingRequestStatus(reqId);

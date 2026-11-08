@@ -12,7 +12,7 @@
         android:orientation="vertical"
         android:padding="20dp">
 
-        <!-- 1. [전용] 차량 화면(C01) QR 코드 인식 기반 차량·계정 연동 카드 -->
+        <!-- 1. [전용] 차량 화면(C01) 인라인 카메라 QR 코드 스캔 카드 (화면 이동 없이 카드 내부에 카메라 뷰파인더 내장) -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -54,9 +54,86 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:lineSpacingExtra="3dp"
-                    android:text="차량 화면(C01)에 표시된 페어링 QR 코드를 카메라로 스캔하면, 백엔드 서버를 통해 차량과 내 계정이 즉시 연동됩니다."
+                    android:text="다른 화면으로 이동하지 않고 아래 내장 카메라 영역에 차량 화면(C01)의 페어링 QR 코드를 비추면 6자리 확인 코드가 표시됩니다."
                     android:textColor="#B0B8C1"
                     android:textSize="13sp" />
+
+                <!-- 카드 내부에 바로 뚫려 있는 인라인 QR 카메라 스캐너 뷰파인더 -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="260dp"
+                    android:layout_marginTop="14dp"
+                    app:cardBackgroundColor="#000000"
+                    app:cardCornerRadius="14dp"
+                    app:cardElevation="0dp"
+                    app:strokeColor="#5CE1A6"
+                    app:strokeWidth="1.5dp">
+
+                    <com.journeyapps.barcodescanner.DecoratedBarcodeView
+                        android:id="@+id/barcode_scanner_m02"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- QR 스캔 후 차량 디스플레이(C01)의 6자리 승인 코드를 직접 입력하는 영역 -->
+                <LinearLayout
+                    android:id="@+id/layout_m02_confirmation_code"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:background="#1D2B3A"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical"
+                    android:padding="16dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="차량 디스플레이(C01) 승인 코드 입력"
+                        android:textColor="#5CE1A6"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_m02_confirmation_code_guide"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center"
+                        android:lineSpacingExtra="2dp"
+                        android:text="차량 디스플레이(C01) 화면에 표시된 6자리 승인 코드를 입력해 주세요."
+                        android:textColor="#D0D7DE"
+                        android:textSize="12sp" />
+
+                    <EditText
+                        android:id="@+id/et_m02_confirmation_code"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:layout_marginTop="10dp"
+                        android:background="#0D1824"
+                        android:gravity="center"
+                        android:hint="6자리 승인 코드 입력"
+                        android:inputType="number"
+                        android:letterSpacing="0.2"
+                        android:maxLength="6"
+                        android:textColor="@color/white"
+                        android:textColorHint="#6C7A89"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_m02_confirm_code"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="12dp"
+                        android:text="차량 승인 코드 확인 및 등록"
+                        android:textColor="#0D1824"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        app:backgroundTint="#5CE1A6"
+                        app:cornerRadius="10dp" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tv_m02_qr_status"
@@ -66,7 +143,7 @@
                     android:background="#263040"
                     android:lineSpacingExtra="3dp"
                     android:padding="12dp"
-                    android:text="상태: 차량 화면(C01)의 QR 코드를 스캔할 준비가 되었습니다."
+                    android:text="상태: 내장 카메라가 활성화되었습니다. 차량 화면(C01)의 QR 코드를 비춰주세요."
                     android:textColor="#5CE1A6"
                     android:textSize="12sp"
                     android:textStyle="bold" />
@@ -74,27 +151,14 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_m02_scan_qr_camera"
                     android:layout_width="match_parent"
-                    android:layout_height="52dp"
-                    android:layout_marginTop="14dp"
-                    android:text="카메라로 차량 QR 코드 스캔"
-                    android:textColor="@color/white"
-                    android:textSize="15sp"
-                    android:textStyle="bold"
-                    app:backgroundTint="@color/fuelog_primary"
-                    app:cornerRadius="12dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_m02_recognize_c01_qr"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="match_parent"
                     android:layout_height="48dp"
-                    android:layout_marginTop="8dp"
-                    android:text="차량(C01) QR 코드 인식 · 연동"
+                    android:layout_marginTop="12dp"
+                    android:text="카메라 스캔 다시 시작 / 권한 허용"
                     android:textColor="@color/white"
                     android:textSize="14sp"
                     android:textStyle="bold"
-                    app:cornerRadius="12dp"
-                    app:strokeColor="#5CE1A6" />
+                    app:backgroundTint="@color/fuelog_primary"
+                    app:cornerRadius="12dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

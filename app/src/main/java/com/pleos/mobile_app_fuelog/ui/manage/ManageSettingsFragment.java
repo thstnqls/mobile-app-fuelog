@@ -1,5 +1,8 @@
 package com.pleos.mobile_app_fuelog.ui.manage;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.InputType;
@@ -8,10 +11,12 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -23,8 +28,9 @@ import androidx.navigation.fragment.NavHostFragment;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.snackbar.Snackbar;
-import com.journeyapps.barcodescanner.ScanContract;
-import com.journeyapps.barcodescanner.ScanOptions;
+import com.google.zxing.BarcodeFormat;
+import com.journeyapps.barcodescanner.BarcodeEncoder;
+import com.journeyapps.barcodescanner.DefaultDecoderFactory;
 import com.pleos.mobile_app_fuelog.R;
 import com.pleos.mobile_app_fuelog.databinding.FragmentManageSettingsBinding;
 import com.pleos.mobile_app_fuelog.data.auth.AuthRepository;
@@ -35,13 +41,16 @@ import com.pleos.mobile_app_fuelog.data.connection.RegisteredPleosDevice;
 import com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient;
 import com.pleos.mobile_app_fuelog.ui.auth.M01LoginViewModel;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 
 /**
  * [관리·설정 탭]
- * - 차량 연동은 Bluetooth SPP 없이 차량 디스플레이(C01)의 QR 코드 인식을 통해서만 수행한다.
- * - 연동된 차량 별칭 관리, QR 재스캔 연동, 차량 연결 초기화(POST /connection/reset), 계정·세션 관리를 제공한다.
+ * - 카드 안에 내장된 인라인 카메라 뷰파인더(DecoratedBarcodeView)로 QR을 스캔하면
+ *   백엔드(POST /pairing-requests/{id}/intent)가 발급한 6자리 비교 확인 코드(confirmation_code)를 화면에 표시한다.
+ * - 사용자가 차량 디스플레이(C01)의 6자리 코드와 일치함을 확인하면 최종 연동(confirm)을 완료한다.
  */
 public class ManageSettingsFragment extends Fragment {
 
@@ -50,13 +59,17 @@ public class ManageSettingsFragment extends Fragment {
     private UserCacheManager userCacheManager;
     private M01LoginViewModel loginViewModel;
     private M04DriverConnectionCoordinator coordinator;
+    private boolean isProcessingQr = false;
 
-    private final ActivityResultLauncher<ScanOptions> qrBarcodeLauncher =
-            registerForActivityResult(new ScanContract(), result -> {
-                if (result.getContents() != null && !result.getContents().trim().isEmpty()) {
-                    executeQrVehicleSync(result.getContents().trim());
-                }
-            });
+    @Nullable
+    private String pendingRequestId = null;
+    @Nullable
+    private String pendingConfirmationCode = null;
+    @NonNull
+    private String pendingVehicleAlias = "QR 연동 차량";
+
+    private final ActivityResultLauncher<String[]> permissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), this::onPermissionsResult);
 
     @Override
     public View onCreateView(
@@ -78,28 +91,120 @@ public class ManageSettingsFragment extends Fragment {
         loginViewModel.init(authRepository);
         coordinator = M04DriverConnectionCoordinator.getInstance();
 
+        setupInlineBarcodeScanner();
         setupListeners();
         renderAll();
+        syncLatestVehicleFromServerDb();
+    }
+
+    private void setupInlineBarcodeScanner() {
+        binding.barcodeScannerManage.getBarcodeView().setDecoderFactory(
+                new DefaultDecoderFactory(Collections.singletonList(BarcodeFormat.QR_CODE))
+        );
+        binding.barcodeScannerManage.setStatusText("차량 디스플레이(C01)의 QR 코드를 사각형 안에 맞춰주세요");
+        binding.barcodeScannerManage.decodeContinuous(result -> {
+            if (binding == null || isProcessingQr || result.getText() == null || result.getText().trim().isEmpty()) {
+                return;
+            }
+            isProcessingQr = true;
+            binding.barcodeScannerManage.pause();
+            String scannedQr = result.getText().trim();
+            requestSixDigitConfirmationCode(scannedQr, "QR 연동 차량");
+        });
+    }
+
+    private void startInlineCameraWithPermissionCheck() {
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED) {
+            if (binding != null) {
+                binding.barcodeScannerManage.resume();
+            }
+        } else {
+            permissionLauncher.launch(new String[]{Manifest.permission.CAMERA});
+        }
+    }
+
+    private void onPermissionsResult(Map<String, Boolean> result) {
+        if (binding == null) {
+            return;
+        }
+        Boolean camGranted = result.get(Manifest.permission.CAMERA);
+        if (Boolean.TRUE.equals(camGranted)) {
+            binding.barcodeScannerManage.resume();
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (binding != null && !isProcessingQr) {
+            startInlineCameraWithPermissionCheck();
+        }
+    }
+
+    @Override
+    public void onPause() {
+        if (binding != null) {
+            binding.barcodeScannerManage.pause();
+        }
+        super.onPause();
+    }
+
+    private void syncLatestVehicleFromServerDb() {
+        AuthSession session = authRepository.getCurrentValidSession();
+        if (session == null) return;
+        String userId = session.getUserId();
+        String instSecret = userCacheManager.getInstallationSecret(userId);
+        if (instSecret == null || instSecret.isEmpty()) return;
+
+        Executors.newSingleThreadExecutor().execute(() -> {
+            FuelogBackendApiClient api = FuelogBackendApiClient.getInstance(authRepository);
+            FuelogBackendApiClient.VehicleHomeResponse home =
+                    api.fetchVehicleHome(instSecret, userCacheManager.getActiveScopedToken());
+            if (home.success && home.vehicleAlias != null && !home.vehicleAlias.trim().isEmpty()) {
+                userCacheManager.setRegisteredVehicleForUser(userId, home.vehicleAlias.trim());
+                coordinator.setVehicleAlias(home.vehicleAlias.trim());
+                if (isAdded() && getActivity() != null) {
+                    requireActivity().runOnUiThread(this::renderAll);
+                }
+            }
+        });
     }
 
     private void setupListeners() {
         // 1. 차량 별칭 수정
         binding.btnManageEditAlias.setOnClickListener(v -> showEditAliasDialog());
 
-        // 2. 카메라로 차량(C01) QR 코드 스캔 연동
+        // 2. 내장 카메라 QR 스캔 재시작 / 권한 허용
         binding.btnManageScanQrCamera.setOnClickListener(v -> {
-            ScanOptions options = new ScanOptions();
-            options.setDesiredBarcodeFormats(ScanOptions.QR_CODE);
-            options.setPrompt("차량 디스플레이(C01)에 표시된 페어링 QR 코드를 스캔하세요");
-            options.setBeepEnabled(false);
-            options.setOrientationLocked(false);
-            qrBarcodeLauncher.launch(options);
+            isProcessingQr = false;
+            pendingRequestId = null;
+            pendingConfirmationCode = null;
+            binding.layoutManageConfirmationCode.setVisibility(View.GONE);
+            startInlineCameraWithPermissionCheck();
         });
 
-        // 3. QR 인식 전용 화면(M02)으로 이동
-        binding.btnManageRegisterVehicle.setOnClickListener(v ->
-                NavHostFragment.findNavController(this).navigate(R.id.nav_m02_no_vehicle)
-        );
+        // 3. 차량 화면(C01)의 6자리 승인 코드 직접 입력 후 차량 연동 확정
+        binding.btnManageConfirmCode.setOnClickListener(v -> {
+            if (pendingRequestId == null) {
+                Snackbar.make(binding.getRoot(), "먼저 차량 화면의 QR 코드를 스캔해 주세요.", Snackbar.LENGTH_SHORT).show();
+                return;
+            }
+            String inputCode = binding.etManageConfirmationCode.getText() != null
+                    ? binding.etManageConfirmationCode.getText().toString().trim()
+                    : "";
+            if (inputCode.length() != 6 || !inputCode.matches("\\d{6}")) {
+                Snackbar.make(binding.getRoot(), "차량 화면에 표시된 6자리 숫자를 입력해 주세요.", Snackbar.LENGTH_SHORT).show();
+                return;
+            }
+            if (pendingConfirmationCode != null && !pendingConfirmationCode.isEmpty()) {
+                if (!pendingConfirmationCode.equals(inputCode)) {
+                    Snackbar.make(binding.getRoot(), "승인 코드가 일치하지 않습니다. 차량 화면의 6자리 코드를 다시 확인해 주세요.", Snackbar.LENGTH_LONG).show();
+                    return;
+                }
+            }
+            confirmSixDigitCodeAndCompleteSync(pendingRequestId, inputCode, pendingVehicleAlias);
+        });
 
         // 4. 자동 추천 허용 스위치
         binding.switchManageAutoRecommend.setChecked(coordinator.isAutoRecommendAllowed());
@@ -123,22 +228,86 @@ public class ManageSettingsFragment extends Fragment {
         });
     }
 
-    private void executeQrVehicleSync(@NonNull String scannedQrPayload) {
+    /**
+     * 1단계: QR 스캔 직후 6자리 비교 확인 코드(confirmation_code)를 발급받아 카드 안에 표시한다.
+     */
+    private void requestSixDigitConfirmationCode(@NonNull String scannedQrPayload, @NonNull String preferredAlias) {
         AuthSession session = authRepository.getCurrentValidSession();
         if (session == null) {
             navigateToM01();
             return;
         }
-        Snackbar.make(binding.getRoot(), "스캔한 QR 코드로 백엔드 차량 연동을 진행합니다...", Snackbar.LENGTH_SHORT).show();
+        Snackbar.make(binding.getRoot(), "QR 코드를 검증하고 6자리 비교 확인 코드를 발급받습니다...", Snackbar.LENGTH_SHORT).show();
         Executors.newSingleThreadExecutor().execute(() -> {
-            FuelogBackendApiClient.EndToEndVehicleSyncResult result =
+            FuelogBackendApiClient.QrIntentCodeResult codeResult =
                     FuelogBackendApiClient.getInstance(authRepository)
-                            .recognizeQrAndLinkVehicle(userCacheManager, scannedQrPayload, "QR 연동 차량");
+                            .submitQrIntentForConfirmationCode(userCacheManager, scannedQrPayload, preferredAlias);
             if (!isAdded() || getActivity() == null) return;
             requireActivity().runOnUiThread(() -> {
                 if (binding == null) return;
+                if (codeResult.success && codeResult.confirmationCode != null && codeResult.requestId != null) {
+                    pendingRequestId = codeResult.requestId;
+                    pendingConfirmationCode = codeResult.confirmationCode;
+                    pendingVehicleAlias = codeResult.vehicleName != null ? codeResult.vehicleName : preferredAlias;
+
+                    binding.layoutManageConfirmationCode.setVisibility(View.VISIBLE);
+                    binding.etManageConfirmationCode.setText("");
+                    binding.etManageConfirmationCode.requestFocus();
+
+                    binding.tvManageConfirmationCodeGuide.setText(
+                            "차량 디스플레이(C01) 화면에 표시된 6자리 승인 코드를 입력해 주세요.\n"
+                                    + "(대상 차량: " + pendingVehicleAlias + ")"
+                    );
+                    Snackbar.make(binding.getRoot(),
+                            "차량 디스플레이의 6자리 승인 코드를 입력해 주세요.",
+                            Snackbar.LENGTH_SHORT).show();
+                } else {
+                    isProcessingQr = false;
+                    if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
+                            == PackageManager.PERMISSION_GRANTED) {
+                        binding.barcodeScannerManage.resume();
+                    }
+                    Snackbar.make(binding.getRoot(),
+                            "QR 코드 검증 실패: " + (codeResult.errorMessage != null ? codeResult.errorMessage : "유효한 C01 QR 코드를 비춰주세요."),
+                            Snackbar.LENGTH_LONG).show();
+                }
+            });
+        });
+    }
+
+    /**
+     * 2단계: 6자리 확인 코드 일치 확인 후 POST /pairing-requests/{id}/confirm으로 최종 연동을 완료한다.
+     */
+    private void confirmSixDigitCodeAndCompleteSync(
+            @NonNull String requestId,
+            @NonNull String confirmationCode,
+            @NonNull String preferredAlias
+    ) {
+        AuthSession session = authRepository.getCurrentValidSession();
+        if (session == null) {
+            navigateToM01();
+            return;
+        }
+        binding.btnManageConfirmCode.setEnabled(false);
+        Snackbar.make(binding.getRoot(),
+                "6자리 확인 코드(" + confirmationCode + ")로 백엔드 DB에 차량을 등록합니다...",
+                Snackbar.LENGTH_SHORT).show();
+
+        Executors.newSingleThreadExecutor().execute(() -> {
+            FuelogBackendApiClient.EndToEndVehicleSyncResult result =
+                    FuelogBackendApiClient.getInstance(authRepository)
+                            .confirmQrPairingWithCode(userCacheManager, requestId, confirmationCode, preferredAlias);
+            if (!isAdded() || getActivity() == null) return;
+            requireActivity().runOnUiThread(() -> {
+                if (binding == null) return;
+                binding.btnManageConfirmCode.setEnabled(true);
+                isProcessingQr = false;
+                if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED) {
+                    binding.barcodeScannerManage.resume();
+                }
                 if (result.success && result.vehicleId != null) {
-                    String resolvedAlias = result.vehicleName != null ? result.vehicleName : "QR 연동 차량";
+                    String resolvedAlias = result.vehicleName != null ? result.vehicleName : preferredAlias;
                     userCacheManager.setRegisteredVehicleUuid(session.getUserId(), result.vehicleId);
                     userCacheManager.setRegisteredVehicleForUser(session.getUserId(), resolvedAlias);
                     coordinator.registerOrUpdateFromQrPairing(
@@ -153,13 +322,14 @@ public class ManageSettingsFragment extends Fragment {
                             result.vehicleId,
                             resolvedAlias
                     );
+                    binding.layoutManageConfirmationCode.setVisibility(View.GONE);
                     renderAll();
                     Snackbar.make(binding.getRoot(),
-                            "QR 차량 연동 완료: " + resolvedAlias + " (" + result.vehicleId + ")",
+                            "6자리 코드(" + confirmationCode + ") 확인 및 차량 연동 완료: " + resolvedAlias,
                             Snackbar.LENGTH_LONG).show();
                 } else {
                     Snackbar.make(binding.getRoot(),
-                            "QR 코드 검증에 실패했습니다.",
+                            "차량 화면(C01)에서 6자리 코드(" + confirmationCode + ") 확인을 완료해 주세요.",
                             Snackbar.LENGTH_LONG).show();
                 }
             });
@@ -178,13 +348,13 @@ public class ManageSettingsFragment extends Fragment {
         if (cachedVehicle != null && !cachedVehicle.isEmpty()) {
             coordinator.setVehicleAlias(cachedVehicle);
             binding.tvManageCurrentVehicle.setText(
-                    "현재 QR 연동 차량: " + cachedVehicle
+                    "현재 서버 DB 연동 차량: " + cachedVehicle
                             + "\n• 차량 UUID: " + (vehicleId != null ? vehicleId : "서버 확인 중")
                             + "\n• 설치 ID (C01): " + (instId != null ? instId : "서버 확인 중")
             );
         } else {
             binding.tvManageCurrentVehicle.setText(
-                    "현재 연동된 차량이 없습니다.\n차량 화면(C01)의 QR 코드를 스캔해 차량을 연동해 주세요."
+                    "현재 연동된 차량이 없습니다.\n아래 내장 카메라 뷰파인더에 차량 화면(C01)의 QR 코드를 비춰주세요."
             );
         }
 
@@ -192,7 +362,7 @@ public class ManageSettingsFragment extends Fragment {
             binding.tvManageAccountInfo.setText(
                     "로그인 이메일: " + session.getEmail()
                             + "\n사용자 ID(sub): " + session.getUserId()
-                            + "\n연동 프로토콜: C01/M02 QR 코드 인식 전용"
+                            + "\n연동 프로토콜: 화면 내장 카메라(C01) QR 스캔 + 6자리 확인 코드 대조"
             );
         } else {
             binding.tvManageAccountInfo.setText("유효한 로그인 세션이 없습니다.");
@@ -206,7 +376,7 @@ public class ManageSettingsFragment extends Fragment {
         List<RegisteredPleosDevice> devices = coordinator.getRegisteredDevices();
         if (devices.isEmpty()) {
             TextView empty = new TextView(requireContext());
-            empty.setText("QR 인식으로 연동된 차량 단말이 없습니다. 상단 [카메라로 차량(C01) QR 코드 스캔 연동] 또는 [M02 이동]으로 연동해 주세요.");
+            empty.setText("QR 인식으로 연동된 차량 단말이 없습니다. 상단 내장 카메라에 차량 QR 코드를 비춰 연동해 주세요.");
             empty.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_secondary));
             empty.setTextSize(12.5f);
             binding.containerManageDevices.addView(empty);
@@ -238,7 +408,7 @@ public class ManageSettingsFragment extends Fragment {
             col.addView(title);
 
             TextView sub = new TextView(requireContext());
-            sub.setText("연동 방식: C01/C03 QR 코드 인증 · 대상 차량: " + dev.getVehicleAlias());
+            sub.setText("연동 방식: 내장 카메라 C01/C03 QR 스캔 · 대상 차량: " + dev.getVehicleAlias());
             sub.setTextSize(12f);
             sub.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_secondary));
             col.addView(sub);
@@ -307,6 +477,9 @@ public class ManageSettingsFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        if (binding != null) {
+            binding.barcodeScannerManage.pause();
+        }
         super.onDestroyView();
         binding = null;
     }
