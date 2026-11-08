@@ -1,15 +1,21 @@
 package com.pleos.mobile_app_fuelog.ui.manage;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.os.CountDownTimer;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -43,6 +49,7 @@ import com.pleos.mobile_app_fuelog.ui.auth.M01LoginViewModel;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
@@ -67,6 +74,11 @@ public class ManageSettingsFragment extends Fragment {
     private String pendingConfirmationCode = null;
     @NonNull
     private String pendingVehicleAlias = "QR 연동 차량";
+
+    @Nullable
+    private CountDownTimer codeCountDownTimer = null;
+    private int codeFailureCount = 0;
+    private boolean isCheckingCode = false;
 
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), this::onPermissionsResult);
@@ -180,30 +192,33 @@ public class ManageSettingsFragment extends Fragment {
             isProcessingQr = false;
             pendingRequestId = null;
             pendingConfirmationCode = null;
+            codeFailureCount = 0;
+            isCheckingCode = false;
+            if (codeCountDownTimer != null) {
+                codeCountDownTimer.cancel();
+                codeCountDownTimer = null;
+            }
             binding.layoutManageConfirmationCode.setVisibility(View.GONE);
             startInlineCameraWithPermissionCheck();
         });
 
-        // 3. 차량 화면(C01)의 6자리 승인 코드 직접 입력 후 차량 연동 확정
-        binding.btnManageConfirmCode.setOnClickListener(v -> {
-            if (pendingRequestId == null) {
-                Snackbar.make(binding.getRoot(), "먼저 차량 화면의 QR 코드를 스캔해 주세요.", Snackbar.LENGTH_SHORT).show();
-                return;
-            }
-            String inputCode = binding.etManageConfirmationCode.getText() != null
-                    ? binding.etManageConfirmationCode.getText().toString().trim()
-                    : "";
-            if (inputCode.length() != 6 || !inputCode.matches("\\d{6}")) {
-                Snackbar.make(binding.getRoot(), "차량 화면에 표시된 6자리 숫자를 입력해 주세요.", Snackbar.LENGTH_SHORT).show();
-                return;
-            }
-            if (pendingConfirmationCode != null && !pendingConfirmationCode.isEmpty()) {
-                if (!pendingConfirmationCode.equals(inputCode)) {
-                    Snackbar.make(binding.getRoot(), "승인 코드가 일치하지 않습니다. 차량 화면의 6자리 코드를 다시 확인해 주세요.", Snackbar.LENGTH_LONG).show();
-                    return;
+        // 3. 차량 화면(C01)의 6자리 승인 코드 직접 입력 또는 6자리 입력 즉시 자동 API 전송
+        binding.etManageConfirmationCode.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (s != null && s.toString().trim().length() == 6
+                        && pendingRequestId != null
+                        && binding != null
+                        && !isCheckingCode) {
+                    attemptConfirmationWithEnteredCode();
                 }
             }
-            confirmSixDigitCodeAndCompleteSync(pendingRequestId, inputCode, pendingVehicleAlias);
         });
 
         // 4. 자동 추천 허용 스위치
@@ -252,14 +267,17 @@ public class ManageSettingsFragment extends Fragment {
 
                     binding.layoutManageConfirmationCode.setVisibility(View.VISIBLE);
                     binding.etManageConfirmationCode.setText("");
+                    binding.etManageConfirmationCode.setEnabled(true);
                     binding.etManageConfirmationCode.requestFocus();
+
+                    startCodeCountdownTimer();
 
                     binding.tvManageConfirmationCodeGuide.setText(
                             "차량 디스플레이(C01) 화면에 표시된 6자리 승인 코드를 입력해 주세요.\n"
                                     + "(대상 차량: " + pendingVehicleAlias + ")"
                     );
                     Snackbar.make(binding.getRoot(),
-                            "차량 디스플레이의 6자리 승인 코드를 입력해 주세요.",
+                            "120초 이내에 차량 디스플레이의 6자리 승인 코드를 입력해 주세요.",
                             Snackbar.LENGTH_SHORT).show();
                 } else {
                     isProcessingQr = false;
@@ -275,6 +293,131 @@ public class ManageSettingsFragment extends Fragment {
         });
     }
 
+    private void startCodeCountdownTimer() {
+        if (codeCountDownTimer != null) {
+            codeCountDownTimer.cancel();
+        }
+        codeFailureCount = 0;
+        isCheckingCode = false;
+        if (binding == null) return;
+        binding.etManageConfirmationCode.setEnabled(true);
+        binding.tvManageCodeError.setVisibility(View.GONE);
+        binding.layoutManageCodeLoading.setVisibility(View.GONE);
+        binding.tvManageCodeTimer.setTextColor(Color.parseColor("#5CE1A6"));
+
+        codeCountDownTimer = new CountDownTimer(120000, 1000) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+                if (binding == null) return;
+                long totalSec = millisUntilFinished / 1000;
+                long min = totalSec / 60;
+                long sec = totalSec % 60;
+                binding.tvManageCodeTimer.setText(String.format(Locale.getDefault(), "남은 입력 시간: %02d:%02d", min, sec));
+                if (totalSec <= 20) {
+                    binding.tvManageCodeTimer.setTextColor(Color.parseColor("#FF6B6B"));
+                }
+            }
+
+            @Override
+            public void onFinish() {
+                if (binding == null) return;
+                binding.tvManageCodeTimer.setText("유효 시간 만료 (120초 초과)");
+                binding.tvManageCodeTimer.setTextColor(Color.parseColor("#FF6B6B"));
+                binding.etManageConfirmationCode.setEnabled(false);
+                binding.layoutManageCodeLoading.setVisibility(View.GONE);
+                binding.tvManageCodeError.setText("120초가 초과되어 승인 코드가 만료되었습니다. 새 QR 코드를 스캔해 주세요.");
+                binding.tvManageCodeError.setVisibility(View.VISIBLE);
+                pendingRequestId = null;
+                pendingConfirmationCode = null;
+            }
+        }.start();
+    }
+
+    private void attemptConfirmationWithEnteredCode() {
+        if (binding == null || isCheckingCode) return;
+        if (pendingRequestId == null) {
+            Snackbar.make(binding.getRoot(), "먼저 차량 화면의 QR 코드를 스캔해 주세요.", Snackbar.LENGTH_SHORT).show();
+            return;
+        }
+        String inputCode = binding.etManageConfirmationCode.getText() != null
+                ? binding.etManageConfirmationCode.getText().toString().trim()
+                : "";
+        if (inputCode.length() != 6 || !inputCode.matches("\\d{6}")) {
+            Snackbar.make(binding.getRoot(), "차량 화면에 표시된 6자리 숫자를 입력해 주세요.", Snackbar.LENGTH_SHORT).show();
+            return;
+        }
+
+        hideKeyboard(binding.etManageConfirmationCode);
+
+        // 6자리 입력 시 로딩 애니메이션 띄우면서 코드 검사 진행
+        isCheckingCode = true;
+        binding.layoutManageCodeLoading.setVisibility(View.VISIBLE);
+        binding.tvManageCodeLoadingText.setText("승인 코드 검사 중...");
+        binding.tvManageCodeError.setVisibility(View.GONE);
+
+        binding.getRoot().postDelayed(() -> {
+            if (binding == null) {
+                isCheckingCode = false;
+                return;
+            }
+
+            boolean isMatch = (pendingConfirmationCode != null && pendingConfirmationCode.equals(inputCode));
+
+            if (!isMatch) {
+                // 틀렸을 때의 로직
+                isCheckingCode = false;
+                codeFailureCount++;
+                binding.layoutManageCodeLoading.setVisibility(View.GONE);
+
+                String errorMsg = "승인 코드가 일치하지 않습니다. (" + codeFailureCount + "회 불일치)\n차량 디스플레이(C01)의 6자리 코드를 다시 확인해 주세요.";
+                binding.tvManageCodeError.setText(errorMsg);
+                binding.tvManageCodeError.setVisibility(View.VISIBLE);
+
+                // 흔들림 애니메이션 효과 및 입력 필드 리셋 후 재입력 대기
+                binding.etManageConfirmationCode.animate()
+                        .translationXBy(20f).setDuration(50)
+                        .withEndAction(() -> binding.etManageConfirmationCode.animate()
+                                .translationXBy(-40f).setDuration(50)
+                                .withEndAction(() -> binding.etManageConfirmationCode.animate()
+                                        .translationXBy(20f).setDuration(50)
+                                        .withEndAction(() -> {
+                                            if (binding != null) {
+                                                binding.etManageConfirmationCode.setTranslationX(0f);
+                                                binding.etManageConfirmationCode.setText("");
+                                                binding.etManageConfirmationCode.requestFocus();
+                                                showKeyboard(binding.etManageConfirmationCode);
+                                            }
+                                        })))
+                        .start();
+
+                Snackbar.make(binding.getRoot(), "승인 코드가 일치하지 않습니다. 다시 입력해 주세요.", Snackbar.LENGTH_SHORT).show();
+            } else {
+                // 맞았을 때의 로직
+                binding.tvManageCodeLoadingText.setText("승인 코드 일치 확인! 백엔드 DB 차량 등록 진행 중...");
+                binding.tvManageCodeError.setVisibility(View.GONE);
+                confirmSixDigitCodeAndCompleteSync(pendingRequestId, inputCode, pendingVehicleAlias);
+            }
+        }, 500);
+    }
+
+    private void hideKeyboard(@Nullable View view) {
+        if (view != null && isAdded() && getContext() != null) {
+            InputMethodManager imm = (InputMethodManager) requireContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+            }
+        }
+    }
+
+    private void showKeyboard(@Nullable View view) {
+        if (view != null && isAdded() && getContext() != null) {
+            InputMethodManager imm = (InputMethodManager) requireContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT);
+            }
+        }
+    }
+
     /**
      * 2단계: 6자리 확인 코드 일치 확인 후 POST /pairing-requests/{id}/confirm으로 최종 연동을 완료한다.
      */
@@ -288,10 +431,9 @@ public class ManageSettingsFragment extends Fragment {
             navigateToM01();
             return;
         }
-        binding.btnManageConfirmCode.setEnabled(false);
         Snackbar.make(binding.getRoot(),
-                "6자리 확인 코드(" + confirmationCode + ")로 백엔드 DB에 차량을 등록합니다...",
-                Snackbar.LENGTH_SHORT).show();
+                "승인 코드 확인 완료! 차량 화면에서 [코드가 같아요 · 차량 연결]을 눌러주세요.",
+                Snackbar.LENGTH_LONG).show();
 
         Executors.newSingleThreadExecutor().execute(() -> {
             FuelogBackendApiClient.EndToEndVehicleSyncResult result =
@@ -300,13 +442,19 @@ public class ManageSettingsFragment extends Fragment {
             if (!isAdded() || getActivity() == null) return;
             requireActivity().runOnUiThread(() -> {
                 if (binding == null) return;
-                binding.btnManageConfirmCode.setEnabled(true);
                 isProcessingQr = false;
+                isCheckingCode = false;
+                binding.layoutManageCodeLoading.setVisibility(View.GONE);
+
                 if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
                         == PackageManager.PERMISSION_GRANTED) {
                     binding.barcodeScannerManage.resume();
                 }
                 if (result.success && result.vehicleId != null) {
+                    if (codeCountDownTimer != null) {
+                        codeCountDownTimer.cancel();
+                        codeCountDownTimer = null;
+                    }
                     String resolvedAlias = result.vehicleName != null ? result.vehicleName : preferredAlias;
                     userCacheManager.setRegisteredVehicleUuid(session.getUserId(), result.vehicleId);
                     userCacheManager.setRegisteredVehicleForUser(session.getUserId(), resolvedAlias);
@@ -477,6 +625,10 @@ public class ManageSettingsFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        if (codeCountDownTimer != null) {
+            codeCountDownTimer.cancel();
+            codeCountDownTimer = null;
+        }
         if (binding != null) {
             binding.barcodeScannerManage.pause();
         }

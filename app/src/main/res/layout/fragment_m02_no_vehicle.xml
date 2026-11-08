@@ -106,6 +106,17 @@
                         android:textColor="#D0D7DE"
                         android:textSize="12sp" />
 
+                    <TextView
+                        android:id="@+id/tv_m02_code_timer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center"
+                        android:text="남은 입력 시간: 02:00"
+                        android:textColor="#5CE1A6"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
                     <EditText
                         android:id="@+id/et_m02_confirmation_code"
                         android:layout_width="match_parent"
@@ -122,17 +133,43 @@
                         android:textSize="22sp"
                         android:textStyle="bold" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_m02_confirm_code"
+                    <TextView
+                        android:id="@+id/tv_m02_code_error"
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="12dp"
-                        android:text="차량 승인 코드 확인 및 등록"
-                        android:textColor="#0D1824"
-                        android:textSize="14sp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center"
+                        android:text="승인 코드가 일치하지 않습니다. 다시 확인해 주세요."
+                        android:textColor="#FF6B6B"
+                        android:textSize="12sp"
                         android:textStyle="bold"
-                        app:backgroundTint="#5CE1A6"
-                        app:cornerRadius="10dp" />
+                        android:visibility="gone" />
+
+                    <LinearLayout
+                        android:id="@+id/layout_m02_code_loading"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <ProgressBar
+                            android:id="@+id/pb_m02_code_checking"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:indeterminateTint="#5CE1A6" />
+
+                        <TextView
+                            android:id="@+id/tv_m02_code_loading_text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="코드 검사 중..."
+                            android:textColor="#5CE1A6"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <TextView
