@@ -432,8 +432,8 @@ public class ManageSettingsFragment extends Fragment {
             return;
         }
         Snackbar.make(binding.getRoot(),
-                "승인 코드 확인 완료! 차량 화면에서 [코드가 같아요 · 차량 연결]을 눌러주세요.",
-                Snackbar.LENGTH_LONG).show();
+                "승인 코드 확인 완료! 백엔드 차량 연동 승인 요청 중...",
+                Snackbar.LENGTH_SHORT).show();
 
         Executors.newSingleThreadExecutor().execute(() -> {
             FuelogBackendApiClient.EndToEndVehicleSyncResult result =
@@ -477,7 +477,7 @@ public class ManageSettingsFragment extends Fragment {
                             Snackbar.LENGTH_LONG).show();
                 } else {
                     Snackbar.make(binding.getRoot(),
-                            "차량 화면(C01)에서 6자리 코드(" + confirmationCode + ") 확인을 완료해 주세요.",
+                            "차량 연동에 실패했습니다. 승인 코드와 차량 화면 상태를 확인해 주세요.",
                             Snackbar.LENGTH_LONG).show();
                 }
             });

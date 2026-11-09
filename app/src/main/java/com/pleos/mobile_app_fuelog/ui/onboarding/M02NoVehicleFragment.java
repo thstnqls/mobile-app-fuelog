@@ -393,8 +393,8 @@ public class M02NoVehicleFragment extends Fragment {
             return;
         }
         if (binding != null) {
-            binding.tvM02QrStatus.setText("상태: 승인 코드 일치 확인! 백엔드 등록 및 차량 확정 대기 중...");
-            Snackbar.make(binding.getRoot(), "승인 코드 확인 완료! 차량 화면에서 [코드가 같아요 · 차량 연결]을 눌러주세요.", Snackbar.LENGTH_LONG).show();
+            binding.tvM02QrStatus.setText("상태: 승인 코드 일치 확인! 백엔드 등록 및 차량 확정 진행 중...");
+            Snackbar.make(binding.getRoot(), "승인 코드 확인 완료! 백엔드 차량 연동 승인 요청 중...", Snackbar.LENGTH_SHORT).show();
         }
 
         new Thread(() -> {
@@ -438,9 +438,9 @@ public class M02NoVehicleFragment extends Fragment {
                             Snackbar.LENGTH_LONG).show();
                     navigateToM03Home();
                 } else {
-                    binding.tvM02QrStatus.setText("상태: 차량 디스플레이에서 [코드가 같아요 · 차량 연결] 확인이 아직 완료되지 않았습니다.");
+                    binding.tvM02QrStatus.setText("상태: 차량 연동 실패 — 확인 코드를 다시 확인하거나 차량 화면 상태를 확인해 주세요.");
                     Snackbar.make(binding.getRoot(),
-                            "차량 디스플레이에서 [코드가 같아요 · 차량 연결] 버튼을 눌러주세요.",
+                            "차량 연동에 실패했습니다. 승인 코드를 다시 확인해 주세요.",
                             Snackbar.LENGTH_LONG).show();
                 }
             });

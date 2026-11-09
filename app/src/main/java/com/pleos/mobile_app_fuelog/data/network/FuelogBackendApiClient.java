@@ -478,6 +478,44 @@ public final class FuelogBackendApiClient {
     }
 
     /**
+     * POST /pairing-requests/{id}/confirm — 모바일 앱에서 6자리 코드로 연결 최종 확인 (Supabase Bearer JWT)
+     */
+    @NonNull
+    public PairingStatusResponse confirmPairingRequestWithMobileJwt(
+            @NonNull String requestId,
+            @NonNull String confirmationCode
+    ) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return new PairingStatusResponse(401, requestId, "unauthorized", null, null, null, "로그인이 필요합니다.");
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection(
+                    "/pairing-requests/" + requestId + "/confirm",
+                    "POST",
+                    token
+            );
+            conn.setDoOutput(true);
+            JSONObject payload = new JSONObject();
+            payload.put("confirmation_code", confirmationCode);
+            writeBody(conn, payload.toString());
+
+            int status = conn.getResponseCode();
+            String body = readBody(conn, status >= 400);
+            if (status >= 200 && status < 300) {
+                return parsePairingStatus(status, requestId, body);
+            }
+            return new PairingStatusResponse(status, requestId, "failed", null, null, null, "HTTP " + status + ": " + body);
+        } catch (Exception e) {
+            SafeLogger.w("POST /pairing-requests/{id}/confirm (Mobile JWT) 예외: " + e.getMessage());
+            return new PairingStatusResponse(0, requestId, "error", null, null, null, e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
      * POST /pairing-requests/{id}/cancel — 차량 앱 페어링 요청 취소
      */
     @NonNull
@@ -2048,8 +2086,9 @@ public final class FuelogBackendApiClient {
 
     /**
      * [2단계: 6자리 확인 코드 대조 후 차량 연결 최종 확정]
-     * 외부 C01 차량 단말에서 이미 확인했는지(GET /pairing-requests/{id}) 조회하거나,
-     * POST /pairing-requests/{id}/confirm으로 6자리 확인 코드를 제출해 실제 DB에 차량을 생성·연동한다.
+     * 모바일 Supabase Bearer JWT로 POST /pairing-requests/{id}/confirm을 호출하여
+     * 6자리 확인 코드를 서버로 전송하고 즉시 vehicle_id를 발급받아 차량 연동을 확정한다.
+     * (차량 화면에서 먼저 승인한 경우를 위한 상태 조회 및 설치 헤더 호출도 폴백으로 지원)
      */
     @NonNull
     public synchronized EndToEndVehicleSyncResult confirmQrPairingWithCode(
@@ -2082,7 +2121,29 @@ public final class FuelogBackendApiClient {
             );
         }
 
-        // 1) 차량 화면(C01)에서 이미 confirm을 눌러 completed 상태가 되었는지 먼저 조회
+        // 1) [최신 백엔드 스펙] 모바일 Supabase Bearer JWT로 POST /pairing-requests/{id}/confirm 직접 전송
+        PairingStatusResponse confirmed = confirmPairingRequestWithMobileJwt(requestId, confirmationCode);
+        if (confirmed.isSuccess() && confirmed.vehicleId != null && !confirmed.vehicleId.isEmpty()) {
+            String resolvedName = confirmed.selectedVehicleName != null && !confirmed.selectedVehicleName.isEmpty()
+                    ? confirmed.selectedVehicleName
+                    : fallbackVehicleName;
+            cacheManager.setRegisteredVehicleUuid(userId, confirmed.vehicleId);
+            cacheManager.setRegisteredVehicleForUser(userId, resolvedName);
+            SafeLogger.i("모바일 JWT 페어링 승인(confirm) 성공: vehId=" + confirmed.vehicleId + ", name=" + resolvedName);
+            return new EndToEndVehicleSyncResult(
+                    true,
+                    cacheManager.getInstallationId(userId),
+                    cacheManager.getInstallationSecret(userId),
+                    confirmed.vehicleId,
+                    resolvedName,
+                    cacheManager.getActiveScopedToken(),
+                    cacheManager.getActiveIntervalId(),
+                    cacheManager.getActiveConsentId(),
+                    cacheManager.getActiveCandidateId()
+            );
+        }
+
+        // 2) 차량 화면(C01)에서 이미 confirm을 눌러 completed 상태가 되었는지 확인 (폴링 조회)
         PairingStatusResponse statusResp = getPairingRequestStatus(requestId);
         for (int i = 0; i < 3 && !"completed".equals(statusResp.status); i++) {
             if ("completed".equals(statusResp.status)) break;
@@ -2093,35 +2154,48 @@ public final class FuelogBackendApiClient {
         }
 
         if ("completed".equals(statusResp.status) && statusResp.vehicleId != null && !statusResp.vehicleId.isEmpty()) {
-            String resolvedName = statusResp.selectedVehicleName != null
+            String resolvedName = statusResp.selectedVehicleName != null && !statusResp.selectedVehicleName.isEmpty()
                     ? statusResp.selectedVehicleName
                     : fallbackVehicleName;
             cacheManager.setRegisteredVehicleUuid(userId, statusResp.vehicleId);
             cacheManager.setRegisteredVehicleForUser(userId, resolvedName);
-            return authenticateAndVerifyTripUserEndToEnd(cacheManager, resolvedName);
+            SafeLogger.i("차량 화면 confirm 완료 감지: vehId=" + statusResp.vehicleId + ", name=" + resolvedName);
+            return new EndToEndVehicleSyncResult(
+                    true,
+                    cacheManager.getInstallationId(userId),
+                    cacheManager.getInstallationSecret(userId),
+                    statusResp.vehicleId,
+                    resolvedName,
+                    cacheManager.getActiveScopedToken(),
+                    cacheManager.getActiveIntervalId(),
+                    cacheManager.getActiveConsentId(),
+                    cacheManager.getActiveCandidateId()
+            );
         }
 
-        // 2) 로컬에 해당 C01 설치 자격증명이 있는 경우 6자리 confirmation_code로 confirm 호출
+        // 3) 로컬에 해당 C01 설치 자격증명이 있는 경우(차량 단말 시뮬레이션 등) 차량 헤더로 confirm 재시도
         String instId = cacheManager.getInstallationId(userId);
         String instSecret = cacheManager.getInstallationSecret(userId);
         if (instId != null && instSecret != null) {
-            PairingStatusResponse confirmed = confirmPairingRequest(instId, instSecret, requestId, confirmationCode);
-            if (confirmed.isSuccess() && confirmed.vehicleId != null && !confirmed.vehicleId.isEmpty()) {
-                String resolvedName = confirmed.selectedVehicleName != null
-                        ? confirmed.selectedVehicleName
+            PairingStatusResponse vehicleConfirmed = confirmPairingRequest(instId, instSecret, requestId, confirmationCode);
+            if (vehicleConfirmed.isSuccess() && vehicleConfirmed.vehicleId != null && !vehicleConfirmed.vehicleId.isEmpty()) {
+                String resolvedName = vehicleConfirmed.selectedVehicleName != null && !vehicleConfirmed.selectedVehicleName.isEmpty()
+                        ? vehicleConfirmed.selectedVehicleName
                         : fallbackVehicleName;
-                cacheManager.setRegisteredVehicleUuid(userId, confirmed.vehicleId);
+                cacheManager.setRegisteredVehicleUuid(userId, vehicleConfirmed.vehicleId);
                 cacheManager.setRegisteredVehicleForUser(userId, resolvedName);
-                return authenticateAndVerifyTripUserEndToEnd(cacheManager, resolvedName);
+                return new EndToEndVehicleSyncResult(
+                        true,
+                        instId,
+                        instSecret,
+                        vehicleConfirmed.vehicleId,
+                        resolvedName,
+                        cacheManager.getActiveScopedToken(),
+                        cacheManager.getActiveIntervalId(),
+                        cacheManager.getActiveConsentId(),
+                        cacheManager.getActiveCandidateId()
+                );
             }
-        }
-
-        // 3) 만약 외부 차량(C01)이거나 대기 상태(awaiting_vehicle_confirmation)인 경우
-        //    사용자가 차량 화면에 표시된 6자리 승인 코드를 직접 올바르게 입력했으므로
-        //    모바일 계정에 차량을 최종 등록 및 동기화한다.
-        EndToEndVehicleSyncResult reg = registerAndConfirmVehicleEndToEnd(cacheManager, fallbackVehicleName);
-        if (reg.success && reg.vehicleId != null) {
-            return reg;
         }
 
         return new EndToEndVehicleSyncResult(
