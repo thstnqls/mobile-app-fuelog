@@ -41,6 +41,20 @@ public final class M03HomeRepository {
     private String lastSyncedTimestamp;
     private double latestOdometerKm = 0.0;
 
+    private static volatile M03HomeRepository instance;
+
+    @NonNull
+    public static M03HomeRepository getInstance() {
+        if (instance == null) {
+            synchronized (M03HomeRepository.class) {
+                if (instance == null) {
+                    instance = new M03HomeRepository();
+                }
+            }
+        }
+        return instance;
+    }
+
     public M03HomeRepository() {
         updateSyncTimestampNow();
     }

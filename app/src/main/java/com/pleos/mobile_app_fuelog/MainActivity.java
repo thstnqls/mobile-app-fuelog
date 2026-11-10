@@ -91,14 +91,15 @@ public class MainActivity extends AppCompatActivity {
                 return true;
             } else if (itemId == R.id.bottom_tab_driving) {
                 if (navController.getCurrentDestination() != null
-                        && navController.getCurrentDestination().getId() != R.id.nav_m04_driver_connection) {
-                    navController.navigate(R.id.nav_m04_driver_connection);
+                        && navController.getCurrentDestination().getId() != R.id.nav_m05_trip_calendar) {
+                    navController.navigate(R.id.nav_m05_trip_calendar);
                 }
                 return true;
             } else if (itemId == R.id.bottom_tab_ledger) {
-                Snackbar.make(binding.getRoot(),
-                        "차계부: 주유·정비 실제 지출 및 정산(M07/M09) 화면",
-                        Snackbar.LENGTH_SHORT).show();
+                if (navController.getCurrentDestination() != null
+                        && navController.getCurrentDestination().getId() != R.id.nav_m10_ledger) {
+                    navController.navigate(R.id.nav_m10_ledger);
+                }
                 return true;
             } else if (itemId == R.id.bottom_tab_manage) {
                 if (navController.getCurrentDestination() != null

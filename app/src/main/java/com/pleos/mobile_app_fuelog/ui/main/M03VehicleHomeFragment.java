@@ -185,9 +185,7 @@ public class M03VehicleHomeFragment extends Fragment {
         });
 
         binding.btnM03AddExpense.setOnClickListener(v ->
-                Snackbar.make(binding.getRoot(),
-                        "주유·정비 지출 기록 화면(M07)으로 연결됩니다.",
-                        Snackbar.LENGTH_SHORT).show()
+                NavHostFragment.findNavController(this).navigate(R.id.nav_m07_fuel_confirm)
         );
     }
 
@@ -246,9 +244,8 @@ public class M03VehicleHomeFragment extends Fragment {
         renderSyncStatusHeader();
 
         // 차량 전환 시 이전 차량 데이터가 남아 섞이지 않도록 모든 컨테이너 초기화
-        binding.containerPendingTasks.removeAllViews();
         binding.containerConfirmedExpenses.removeAllViews();
-        binding.containerRecentTrips.removeAllViews();
+        binding.containerPendingTasks.removeAllViews();
         binding.containerMaintenanceSchedule.removeAllViews();
 
         VehicleProfile selectedVehicle = homeRepository.getSelectedVehicle();
@@ -277,10 +274,9 @@ public class M03VehicleHomeFragment extends Fragment {
             binding.tvM03OdometerValue.setText("최신 거리 확인 필요");
         }
 
-        renderPendingTasksSection();
         renderMonthlyExpensesSection();
+        renderPendingTasksSection();
         renderMaintenanceSection();
-        renderRecentTripsSection();
     }
 
     /**
@@ -357,6 +353,12 @@ public class M03VehicleHomeFragment extends Fragment {
         PendingTaskItem.TaskDestination dest = task.getDestination();
         if (dest == PendingTaskItem.TaskDestination.M04_TRIP_ATTRIBUTION) {
             NavHostFragment.findNavController(this).navigate(R.id.nav_m04_driver_connection);
+            return;
+        }
+        if (dest == PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM) {
+            Bundle args = new Bundle();
+            args.putString(com.pleos.mobile_app_fuelog.ui.ledger.M07FuelConfirmFragment.ARG_CANDIDATE_ID, "cand-" + task.getTaskId());
+            NavHostFragment.findNavController(this).navigate(R.id.nav_m07_fuel_confirm, args);
             return;
         }
         new MaterialAlertDialogBuilder(requireContext())
@@ -498,44 +500,6 @@ public class M03VehicleHomeFragment extends Fragment {
 
             if (i < items.size() - 1) {
                 binding.containerMaintenanceSchedule.addView(createDivider());
-            }
-        }
-    }
-
-    /**
-     * 4. 최근 운행
-     */
-    private void renderRecentTripsSection() {
-        List<TripRecord> trips = homeRepository.getRecentTripsForSelectedVehicle();
-        if (trips.isEmpty()) {
-            binding.containerRecentTrips.addView(createEmptyRowText("표시할 최근 운행 기록이 없습니다."));
-            return;
-        }
-
-        for (int i = 0; i < trips.size(); i++) {
-            TripRecord trip = trips.get(i);
-
-            LinearLayout col = new LinearLayout(requireContext());
-            col.setOrientation(LinearLayout.VERTICAL);
-            col.setPadding(0, dpToPx(8), 0, dpToPx(8));
-
-            TextView route = new TextView(requireContext());
-            route.setText(trip.getRouteSummary() + "  (" + String.format(Locale.KOREA, "%.1fkm", trip.getDistanceKm()) + ")");
-            route.setTextSize(14f);
-            route.setTypeface(null, Typeface.BOLD);
-            route.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_primary));
-
-            TextView meta = new TextView(requireContext());
-            meta.setText(trip.getDateTimeLabel() + " · " + trip.getDurationMinutes() + "분 · " + trip.getAttributionBadge());
-            meta.setTextSize(12f);
-            meta.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_secondary));
-
-            col.addView(route);
-            col.addView(meta);
-            binding.containerRecentTrips.addView(col);
-
-            if (i < trips.size() - 1) {
-                binding.containerRecentTrips.addView(createDivider());
             }
         }
     }

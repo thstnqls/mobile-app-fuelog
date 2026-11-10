@@ -34,4 +34,22 @@
         android:name="com.pleos.mobile_app_fuelog.ui.manage.ManageSettingsFragment"
         android:label="관리 · 설정"
         tools:layout="@layout/fragment_manage_settings" />
+
+    <fragment
+        android:id="@+id/nav_m05_trip_calendar"
+        android:name="com.pleos.mobile_app_fuelog.ui.trips.M05TripCalendarFragment"
+        android:label="M05. 운행 캘린더"
+        tools:layout="@layout/fragment_m05_trip_calendar" />
+
+    <fragment
+        android:id="@+id/nav_m10_ledger"
+        android:name="com.pleos.mobile_app_fuelog.ui.ledger.M10LedgerFragment"
+        android:label="차계부"
+        tools:layout="@layout/fragment_m10_ledger" />
+
+    <fragment
+        android:id="@+id/nav_m07_fuel_confirm"
+        android:name="com.pleos.mobile_app_fuelog.ui.ledger.M07FuelConfirmFragment"
+        android:label="M07. 주유 확인 및 등록"
+        tools:layout="@layout/fragment_m07_fuel_confirm" />
 </navigation>

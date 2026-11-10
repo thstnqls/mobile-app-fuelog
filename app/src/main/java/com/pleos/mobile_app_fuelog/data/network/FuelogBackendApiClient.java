@@ -22,6 +22,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -1845,6 +1846,182 @@ public final class FuelogBackendApiClient {
             return false;
         } finally {
             if (conn != null) conn.disconnect();
+        }
+    }
+
+    public static final class FuelCandidateDetailResponse {
+        public final boolean success;
+        public final int httpStatus;
+        @Nullable public final String id;
+        @Nullable public final String status; // CANDIDATE, CONFIRMED, REJECTED
+        public final long revision;
+        public final boolean capacityVerified;
+        @Nullable public final Double estimatedLiters;
+        @Nullable public final Double estimatedAmount;
+        @Nullable public final Long priceAt;
+        @NonNull public final List<String> stationCandidates;
+        @Nullable public final String intervalId;
+        @Nullable public final Long startAt;
+        @Nullable public final Long endAt;
+        @Nullable public final Double increasePercent;
+        @Nullable public final String correctedPlace;
+        @Nullable public final Double correctedLiters;
+        @Nullable public final Double correctedAmount;
+        @Nullable public final String errorMessage;
+
+        public FuelCandidateDetailResponse(
+                boolean success,
+                int httpStatus,
+                @Nullable String id,
+                @Nullable String status,
+                long revision,
+                boolean capacityVerified,
+                @Nullable Double estimatedLiters,
+                @Nullable Double estimatedAmount,
+                @Nullable Long priceAt,
+                @NonNull List<String> stationCandidates,
+                @Nullable String intervalId,
+                @Nullable Long startAt,
+                @Nullable Long endAt,
+                @Nullable Double increasePercent,
+                @Nullable String correctedPlace,
+                @Nullable Double correctedLiters,
+                @Nullable Double correctedAmount,
+                @Nullable String errorMessage
+        ) {
+            this.success = success;
+            this.httpStatus = httpStatus;
+            this.id = id;
+            this.status = status;
+            this.revision = revision;
+            this.capacityVerified = capacityVerified;
+            this.estimatedLiters = estimatedLiters;
+            this.estimatedAmount = estimatedAmount;
+            this.priceAt = priceAt;
+            this.stationCandidates = stationCandidates;
+            this.intervalId = intervalId;
+            this.startAt = startAt;
+            this.endAt = endAt;
+            this.increasePercent = increasePercent;
+            this.correctedPlace = correctedPlace;
+            this.correctedLiters = correctedLiters;
+            this.correctedAmount = correctedAmount;
+            this.errorMessage = errorMessage;
+        }
+
+        public boolean isSuccess() {
+            return success && httpStatus >= 200 && httpStatus < 300;
+        }
+    }
+
+    /**
+     * GET /mobile/fuel-candidates/{id} — 내 주유 후보 상세 조회 (Supabase Bearer JWT)
+     */
+    @NonNull
+    public FuelCandidateDetailResponse fetchFuelCandidateDetail(@NonNull String candidateId) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return new FuelCandidateDetailResponse(false, 401, candidateId, null, 0L, false, null, null, null, Collections.emptyList(), null, null, null, null, null, null, null, "인증 토큰이 없습니다.");
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/fuel-candidates/" + candidateId, "GET", token);
+            int status = conn.getResponseCode();
+            String body = readBody(conn, status >= 400);
+            if (status >= 200 && status < 300) {
+                return parseFuelCandidateJson(status, candidateId, body);
+            }
+            return new FuelCandidateDetailResponse(false, status, candidateId, null, 0L, false, null, null, null, Collections.emptyList(), null, null, null, null, null, null, null, "HTTP " + status + ": " + body);
+        } catch (Exception e) {
+            SafeLogger.w("GET /mobile/fuel-candidates/" + candidateId + " 예외: " + e.getMessage());
+            return new FuelCandidateDetailResponse(false, 0, candidateId, null, 0L, false, null, null, null, Collections.emptyList(), null, null, null, null, null, null, null, e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
+     * PATCH /mobile/fuel-candidates/{id} — 주유 후보 확인·기각 및 보정 (M07)
+     */
+    @NonNull
+    public FuelCandidateDetailResponse patchFuelCandidate(
+            @NonNull String candidateId,
+            @NonNull String action, // CONFIRM or REJECT
+            long expectedRevision,
+            @Nullable String place,
+            @Nullable Double liters,
+            @Nullable Double amount
+    ) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return new FuelCandidateDetailResponse(false, 401, candidateId, null, expectedRevision, false, null, null, null, Collections.emptyList(), null, null, null, null, null, null, null, "인증 토큰이 없습니다.");
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/fuel-candidates/" + candidateId, "PATCH", token);
+            conn.setDoOutput(true);
+            JSONObject payload = new JSONObject();
+            payload.put("operationId", "patch-" + UUID.randomUUID());
+            payload.put("expectedRevision", expectedRevision);
+            payload.put("action", action);
+            if (place != null) {
+                payload.put("place", place);
+            }
+            if (liters != null) {
+                payload.put("liters", liters);
+            }
+            if (amount != null) {
+                payload.put("amount", amount);
+            }
+            writeBody(conn, payload.toString());
+
+            int status = conn.getResponseCode();
+            String body = readBody(conn, status >= 400);
+            if (status >= 200 && status < 300) {
+                return parseFuelCandidateJson(status, candidateId, body);
+            }
+            return new FuelCandidateDetailResponse(false, status, candidateId, null, expectedRevision, false, null, null, null, Collections.emptyList(), null, null, null, null, null, null, null, "HTTP " + status + ": " + body);
+        } catch (Exception e) {
+            SafeLogger.w("PATCH /mobile/fuel-candidates/" + candidateId + " 예외: " + e.getMessage());
+            return new FuelCandidateDetailResponse(false, 0, candidateId, null, expectedRevision, false, null, null, null, Collections.emptyList(), null, null, null, null, null, null, null, e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    @NonNull
+    private static FuelCandidateDetailResponse parseFuelCandidateJson(int status, @NonNull String fallbackId, @NonNull String body) {
+        try {
+            JSONObject obj = new JSONObject(body);
+            String id = obj.optString("id", fallbackId);
+            String candidateStatus = obj.optString("status", "CANDIDATE");
+            long revision = obj.optLong("revision", 1L);
+            boolean capacityVerified = obj.optBoolean("capacityVerified", false);
+            Double estLiters = obj.isNull("estimatedLiters") ? null : obj.optDouble("estimatedLiters");
+            Double estAmount = obj.isNull("estimatedAmount") ? null : obj.optDouble("estimatedAmount");
+            Long priceAt = obj.isNull("priceAt") ? null : obj.optLong("priceAt");
+            List<String> stations = new ArrayList<>();
+            JSONArray arr = obj.optJSONArray("stationCandidates");
+            if (arr != null) {
+                for (int i = 0; i < arr.length(); i++) {
+                    stations.add(arr.getString(i));
+                }
+            }
+            String intervalId = obj.isNull("intervalId") ? null : obj.optString("intervalId");
+            Long startAt = obj.isNull("startAt") ? null : obj.optLong("startAt");
+            Long endAt = obj.isNull("endAt") ? null : obj.optLong("endAt");
+            Double increasePercent = obj.isNull("increasePercent") ? null : obj.optDouble("increasePercent");
+            String correctedPlace = obj.isNull("correctedPlace") ? null : obj.optString("correctedPlace");
+            Double correctedLiters = obj.isNull("correctedLiters") ? null : obj.optDouble("correctedLiters");
+            Double correctedAmount = obj.isNull("correctedAmount") ? null : obj.optDouble("correctedAmount");
+
+            return new FuelCandidateDetailResponse(
+                    true, status, id, candidateStatus, revision, capacityVerified,
+                    estLiters, estAmount, priceAt, stations, intervalId,
+                    startAt, endAt, increasePercent, correctedPlace, correctedLiters, correctedAmount, null
+            );
+        } catch (Exception e) {
+            return new FuelCandidateDetailResponse(true, status, fallbackId, "CANDIDATE", 1L, false, null, null, null, Collections.emptyList(), null, null, null, null, null, null, null, null);
         }
     }
 

@@ -1,0 +1,529 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/fuelog_surface">
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="40dp">
+
+            <!-- 1. 상단 앱바 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="12dp">
+
+                <ImageButton
+                    android:id="@+id/btn_back"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_revert"
+                    app:tint="@color/fuelog_text_primary"
+                    android:contentDescription="뒤로가기" />
+
+                <TextView
+                    android:id="@+id/text_screen_title"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="주유 확인 및 등록"
+                    android:textColor="@color/fuelog_text_primary"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+            <!-- 2. 차량 센서 자동 감지 원본 카드 (수동 등록 시 GONE) -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_auto_detected_fuel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="12dp"
+                app:cardBackgroundColor="@color/fuelog_card_bg"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/fuelog_primary"
+                app:strokeWidth="1.5dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="🔍 차량에서 감지된 주유"
+                            android:textColor="@color/fuelog_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/bg_trip_source_badge"
+                            android:paddingHorizontal="6dp"
+                            android:paddingVertical="2dp"
+                            android:text="자동 감지 원본"
+                            android:textColor="@color/fuelog_primary"
+                            android:textSize="11sp" />
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="차량 F01 연료 센서에서 주유가 감지되었습니다. 영수증을 확인하고 실제 결제 금액을 확정해 주세요."
+                        android:textColor="@color/fuelog_text_secondary"
+                        android:textSize="12.5sp" />
+
+                    <!-- 감지 데이터 요약 테이블 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="#155CE1A6"
+                        android:orientation="horizontal"
+                        android:paddingVertical="10dp"
+                        android:paddingHorizontal="12dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="추정 주유량"
+                                android:textColor="@color/fuelog_text_secondary"
+                                android:textSize="11.5sp" />
+
+                            <TextView
+                                android:id="@+id/text_detected_liters"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="20.0 L"
+                                android:textColor="@color/fuelog_text_primary"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="게시 단가"
+                                android:textColor="@color/fuelog_text_secondary"
+                                android:textSize="11.5sp" />
+
+                            <TextView
+                                android:id="@+id/text_detected_unit_price"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="1,700원/L"
+                                android:textColor="@color/fuelog_text_primary"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="추정 금액"
+                                android:textColor="@color/fuelog_text_secondary"
+                                android:textSize="11.5sp" />
+
+                            <TextView
+                                android:id="@+id/text_detected_amount"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="34,000원"
+                                android:textColor="@color/fuelog_primary"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/text_detected_time"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="감지 시각: 2026-11-10 14:20 (차량 센서 관측)"
+                        android:textColor="@color/fuelog_text_secondary"
+                        android:textSize="11.5sp" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 3. 주유소 선택 & 유종 카드 -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginBottom="12dp"
+                app:cardBackgroundColor="@color/fuelog_card_bg"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/fuelog_border"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="주유소 선택"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <!-- 오피넷 후보 / 선택 칩 그룹 -->
+                    <RadioGroup
+                        android:id="@+id/rg_station_candidates"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp">
+
+                        <RadioButton
+                            android:id="@+id/rb_station_candidate_1"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="GS칼텍스 삼일주유소 (차량 인근 0.3km)"
+                            android:textColor="@color/fuelog_text_primary"
+                            android:textSize="13sp"
+                            android:checked="true" />
+
+                        <RadioButton
+                            android:id="@+id/rb_station_candidate_2"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="SK에너지 역삼셀프 (0.8km)"
+                            android:textColor="@color/fuelog_text_primary"
+                            android:textSize="13sp" />
+
+                        <RadioButton
+                            android:id="@+id/rb_station_manual"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="찾는 주유소가 없어요 (직접 입력)"
+                            android:textColor="@color/fuelog_text_secondary"
+                            android:textSize="13sp" />
+
+                    </RadioGroup>
+
+                    <EditText
+                        android:id="@+id/et_station_manual_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="6dp"
+                        android:background="@drawable/bg_login_input_field"
+                        android:hint="주유소 이름을 직접 입력해 주세요"
+                        android:paddingHorizontal="12dp"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textColorHint="@color/fuelog_text_secondary"
+                        android:textSize="13.5sp"
+                        android:visibility="gone" />
+
+                    <!-- 유종 선택 -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:text="유종"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/chip_group_fuel_type"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        app:singleSelection="true">
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_gasoline"
+                            style="@style/Widget.MaterialComponents.Chip.Choice"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true"
+                            android:text="휘발유" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_diesel"
+                            style="@style/Widget.MaterialComponents.Chip.Choice"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="경유" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_premium_gasoline"
+                            style="@style/Widget.MaterialComponents.Chip.Choice"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="고급휘발유" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_lpg"
+                            style="@style/Widget.MaterialComponents.Chip.Choice"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="LPG" />
+
+                    </com.google.android.material.chip.ChipGroup>
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 4. 실제 결제 정보 입력 카드 (FR-M07-2, FR-M07-3) -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginBottom="12dp"
+                app:cardBackgroundColor="@color/fuelog_card_bg"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/fuelog_border"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="실제 결제 정보 입력"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="※ 영수증의 실제 결제 금액을 입력해 주세요. 금액만 입력해도 확인 거래로 저장됩니다."
+                        android:textColor="@color/fuelog_text_secondary"
+                        android:textSize="12sp" />
+
+                    <!-- 실제 결제 금액 (원) -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="실제 결제 금액 (원) *"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <EditText
+                        android:id="@+id/et_actual_amount"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="6dp"
+                        android:background="@drawable/bg_login_input_field"
+                        android:hint="예: 33,000"
+                        android:inputType="number"
+                        android:paddingHorizontal="14dp"
+                        android:textColor="@color/fuelog_primary"
+                        android:textColorHint="@color/fuelog_text_secondary"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <!-- 실제 주유량 (L) -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="실제 주유량 (L) (선택 입력)"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <EditText
+                        android:id="@+id/et_actual_liters"
+                        android:layout_width="match_parent"
+                        android:layout_height="46dp"
+                        android:layout_marginTop="6dp"
+                        android:background="@drawable/bg_login_input_field"
+                        android:hint="예: 20.0"
+                        android:inputType="numberDecimal"
+                        android:paddingHorizontal="14dp"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textColorHint="@color/fuelog_text_secondary"
+                        android:textSize="14sp" />
+
+                    <!-- 리터당 단가 (원/L) -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="단가 (원/L)"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <EditText
+                        android:id="@+id/et_unit_price"
+                        android:layout_width="match_parent"
+                        android:layout_height="46dp"
+                        android:layout_marginTop="6dp"
+                        android:background="@drawable/bg_login_input_field"
+                        android:hint="예: 1,700"
+                        android:inputType="number"
+                        android:paddingHorizontal="14dp"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textColorHint="@color/fuelog_text_secondary"
+                        android:textSize="14sp" />
+
+                    <!-- 금액·양·단가 불일치 시 할인/반올림 안내 박스 (FR-M07-3) -->
+                    <LinearLayout
+                        android:id="@+id/layout_discrepancy_notice"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="#15FFA500"
+                        android:orientation="vertical"
+                        android:padding="10dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="💡 결제 금액과 계산 금액의 차이 안내"
+                            android:textColor="#FFA500"
+                            android:textSize="12.5sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/text_discrepancy_detail"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="단가 계산 금액(34,000원)과 입력하신 결제 금액(33,000원)이 다릅니다. 주유 할인·쿠폰 등이 적용되었을 수 있으며, 입력하신 실제 결제 금액이 우선 보존됩니다."
+                            android:textColor="@color/fuelog_text_secondary"
+                            android:textSize="11.5sp" />
+
+                    </LinearLayout>
+
+                    <!-- 메모 입력 -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="메모 (선택사항)"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textSize="13sp" />
+
+                    <EditText
+                        android:id="@+id/et_fuel_memo"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="6dp"
+                        android:background="@drawable/bg_login_input_field"
+                        android:hint="메모를 입력해 주세요"
+                        android:paddingHorizontal="14dp"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textColorHint="@color/fuelog_text_secondary"
+                        android:textSize="13sp" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 5. 액션 버튼 영역 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="4dp"
+                android:orientation="vertical">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_save_fuel_record"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:text="확인 저장"
+                    android:textColor="#0D1824"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    app:backgroundTint="@color/fuelog_primary"
+                    app:cornerRadius="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_reject_fuel"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="8dp"
+                    android:text="주유 아님 (기각)"
+                    android:textColor="#FFEF4444"
+                    android:textSize="14sp"
+                    app:backgroundTint="@android:color/transparent"
+                    app:cornerRadius="12dp"
+                    app:strokeColor="#FFEF4444"
+                    app:strokeWidth="1dp" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
