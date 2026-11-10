@@ -1749,6 +1749,93 @@ public final class FuelogBackendApiClient {
         return -1L;
     }
 
+    /** 모바일 사용자의 소유·참여 차량 모델 */
+    public static class BackendVehicleItem {
+        public final String id;
+        public final String vehicleId;
+        public final String name;
+        public final String vehicleName;
+        public final String role;
+        public final String createdAt;
+        public final boolean paired;
+        public final String installationId;
+
+        public BackendVehicleItem(
+                String id,
+                String vehicleId,
+                String name,
+                String vehicleName,
+                String role,
+                String createdAt,
+                boolean paired,
+                String installationId
+        ) {
+            this.id = id;
+            this.vehicleId = vehicleId != null ? vehicleId : id;
+            this.name = name;
+            this.vehicleName = vehicleName != null ? vehicleName : name;
+            this.role = role != null ? role : "OWNER";
+            this.createdAt = createdAt;
+            this.paired = paired;
+            this.installationId = installationId;
+        }
+
+        @NonNull
+        public String getDisplayName() {
+            if (vehicleName != null && !vehicleName.trim().isEmpty()) {
+                return vehicleName.trim();
+            }
+            if (name != null && !name.trim().isEmpty()) {
+                return name.trim();
+            }
+            return "차량 " + (vehicleId != null && vehicleId.length() >= 8 ? vehicleId.substring(0, 8) : "");
+        }
+    }
+
+    /**
+     * GET /mobile/vehicles — 모바일 사용자의 소유·관리·참여 전체 차량 목록 조회 (Supabase Bearer JWT)
+     */
+    @NonNull
+    public List<BackendVehicleItem> fetchMobileVehicles() {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return Collections.emptyList();
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles", "GET", token);
+            int status = conn.getResponseCode();
+            String body = readBody(conn, status >= 400);
+            if (status >= 200 && status < 300) {
+                JSONArray arr = new JSONArray(body);
+                List<BackendVehicleItem> list = new ArrayList<>();
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject obj = arr.getJSONObject(i);
+                    String id = obj.optString("id", "");
+                    String vehicleId = obj.optString("vehicleId", id);
+                    String name = obj.optString("name", "");
+                    String vehicleName = obj.optString("vehicleName", name);
+                    String role = obj.optString("role", "OWNER");
+                    String createdAt = obj.optString("createdAt", "");
+                    boolean paired = obj.optBoolean("paired", false);
+                    String installationId = obj.isNull("installationId") ? null : obj.optString("installationId", null);
+                    list.add(new BackendVehicleItem(id, vehicleId, name, vehicleName, role, createdAt, paired, installationId));
+                }
+                SafeLogger.i("GET /mobile/vehicles 조회 성공: " + list.size() + "대 수신");
+                return list;
+            } else {
+                SafeLogger.w("GET /mobile/vehicles 실패 status=" + status + ", body=" + body);
+            }
+        } catch (Exception e) {
+            SafeLogger.w("GET /mobile/vehicles 예외: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
+        return Collections.emptyList();
+    }
+
     /**
      * GET /mobile/inbox?cursor={cursor} — 내 운행 확인함 조회 (Supabase Bearer JWT)
      */

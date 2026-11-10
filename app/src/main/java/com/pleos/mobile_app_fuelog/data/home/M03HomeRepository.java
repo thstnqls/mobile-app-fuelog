@@ -9,8 +9,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * M03. 홈 데이터 저장소 및 상태 조립기 (백엔드 API / DB 연동 전용).
@@ -31,6 +33,7 @@ public final class M03HomeRepository {
     private final List<TripRecord> allTrips = new ArrayList<>();
     private final List<ExpenseRecord> allExpenses = new ArrayList<>();
     private final List<MaintenanceScheduleItem> allMaintenanceItems = new ArrayList<>();
+    private final Map<String, Double> vehicleOdometerMap = new HashMap<>();
 
     @Nullable
     private String selectedVehicleId;
@@ -63,26 +66,151 @@ public final class M03HomeRepository {
      * 하드코딩된 더미 데이터 없이 저장소를 비우고, 전달된 대표 차량 정보만 초기화한다.
      */
     public synchronized void clearAllAndInitVehicle(@Nullable String primaryVehicleId, @Nullable String customPrimaryVehicleLabel) {
+        if (!vehicles.isEmpty()) {
+            if (primaryVehicleId != null && !primaryVehicleId.trim().isEmpty()) {
+                selectVehicle(primaryVehicleId.trim());
+            }
+            return;
+        }
         vehicles.clear();
+        vehicleOdometerMap.clear();
         allPendingTasks.clear();
         allTrips.clear();
         allExpenses.clear();
         allMaintenanceItems.clear();
-        latestOdometerKm = 0.0;
 
-        if (customPrimaryVehicleLabel != null && !customPrimaryVehicleLabel.trim().isEmpty()) {
-            String vid = (primaryVehicleId != null && !primaryVehicleId.trim().isEmpty())
-                    ? primaryVehicleId.trim()
-                    : VEHICLE_ID_PRIMARY;
-            String label = customPrimaryVehicleLabel.trim();
-            String fuelType = extractFuelTypeFromLabel(label);
-            String plate = extractPlateFromLabel(label);
-            vehicles.add(new VehicleProfile(vid, plate, fuelType, label, true));
-            selectedVehicleId = vid;
-            newUserEmptyMode = false;
+        // 1. 민우의 아이오닉 5 (10,240.5 km)
+        String v1Id = "c1000000-0000-4000-8000-000000000001";
+        vehicles.add(new VehicleProfile(v1Id, "민우의 아이오닉 5", "전기", "민우의 아이오닉 5", false, "OWNER", true, "c3000000-0000-4000-8000-000000000001"));
+        vehicleOdometerMap.put(v1Id, 10240.5);
+
+        // 2. 246무 4710 (48,200.5 km)
+        String v2Id = "d7f7d2fa-985d-4f7d-93e9-ea99a29bcaa7";
+        vehicles.add(new VehicleProfile(v2Id, "246무 4710", "경유", "246무 4710", true, "OWNER", true, "inst-246mu-4710"));
+        vehicleOdometerMap.put(v2Id, 48200.5);
+
+        // 3. 12가 3456 (휘발유) (62,340.0 km)
+        String v3Id = "28017757-d498-4e4c-a40b-d0a7e81bbda4";
+        vehicles.add(new VehicleProfile(v3Id, "12가 3456", "휘발유", "12가 3456 (휘발유)", false, "OWNER", false, null));
+        vehicleOdometerMap.put(v3Id, 62340.0);
+
+        // 4. QR 연동 차량 (21,500.0 km)
+        String v4Id = "394e8f5a-ef47-4082-a270-c3956b6db8c3";
+        vehicles.add(new VehicleProfile(v4Id, "QR 연동 차량", "하이브리드", "QR 연동 차량", false, "OWNER", true, "0ce88920-e4ee-4b04-b6ee-17a3f71d5cbf"));
+        vehicleOdometerMap.put(v4Id, 21500.0);
+
+        // 5. 등록 차량 (15,300.0 km)
+        String v5Id = "0a224510-0bd1-45fa-9de3-9c7d57217e57";
+        vehicles.add(new VehicleProfile(v5Id, "등록 차량", "휘발유", "등록 차량", true, "OWNER", false, null));
+        vehicleOdometerMap.put(v5Id, 15300.0);
+
+        // 6. 테스트 차량 A (5,420.0 km)
+        String v6Id = "f1000000-0000-4000-8000-000000000001";
+        vehicles.add(new VehicleProfile(v6Id, "테스트 차량 A", "전기", "테스트 차량 A", true, "MEMBER", true, "f3000000-0000-4000-8000-000000000001"));
+        vehicleOdometerMap.put(v6Id, 5420.0);
+
+        initVehicleSpecificData(v1Id, v2Id, v3Id, v4Id, v5Id, v6Id);
+
+        if (primaryVehicleId != null && !primaryVehicleId.trim().isEmpty()) {
+            selectVehicle(primaryVehicleId.trim());
         } else {
-            selectedVehicleId = null;
+            selectVehicle(v1Id);
         }
+        newUserEmptyMode = false;
+    }
+
+    private void initVehicleSpecificData(
+            String v1Id, String v2Id, String v3Id, String v4Id, String v5Id, String v6Id
+    ) {
+        // v1: 민우의 아이오닉 5 (전기)
+        allTrips.add(new TripRecord("trip_ionic_1", v1Id, "11월 06일 18:00", "집 → 회사 (출근)", 48.2, 70, "개인", 6216, ExpenseRecord.Ownership.MY_RECORD));
+        allTrips.add(new TripRecord("trip_ionic_2", v1Id, "11월 05일 08:30", "회사 → 본가 (퇴근)", 32.5, 45, "개인", 4368, ExpenseRecord.Ownership.MY_RECORD));
+        allExpenses.add(new ExpenseRecord("exp_ionic_1", v1Id, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.MY_RECORD, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "급속 충전 (환경부 초고속)", "11월 06일", 45000));
+        allExpenses.add(new ExpenseRecord("exp_ionic_2", v1Id, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.MY_RECORD, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "완속 충전 (아파트 충전기)", "11월 02일", 80000));
+        allMaintenanceItems.add(new MaintenanceScheduleItem("maint_ionic_1", v1Id, "에어컨 필터 및 기본 점검", "제조사 권장 15,000km 점검", "15,000km 남음", false));
+        allPendingTasks.add(new PendingTaskItem("task_ionic_1", v1Id, PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM, "충전 기록 확인 필요 (1건)", "11월 06일 충전 감지 내역 검토 대기", 0L));
+
+        // v2: 246무 4710 (경유)
+        allTrips.add(new TripRecord("trip_246_1", v2Id, "11월 10일 14:20", "과천 → 송도", 52.1, 75, "공동", 8800, ExpenseRecord.Ownership.EXPLICITLY_SHARED));
+        allTrips.add(new TripRecord("trip_246_2", v2Id, "11월 09일 09:10", "일산 → 분당", 45.2, 60, "공동", 7600, ExpenseRecord.Ownership.EXPLICITLY_SHARED));
+        allTrips.add(new TripRecord("trip_246_3", v2Id, "11월 07일 19:30", "강남 → 일산", 38.0, 50, "공동", 6400, ExpenseRecord.Ownership.EXPLICITLY_SHARED));
+        allExpenses.add(new ExpenseRecord("exp_246_1", v2Id, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.EXPLICITLY_SHARED, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "GS칼텍스 삼거리주유소", "11월 07일", 90000));
+        allExpenses.add(new ExpenseRecord("exp_246_2", v2Id, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.EXPLICITLY_SHARED, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "SK에너지 직영주유소", "11월 02일", 120000));
+        allExpenses.add(new ExpenseRecord("exp_246_3", v2Id, ExpenseRecord.Category.MAINTENANCE, ExpenseRecord.Ownership.EXPLICITLY_SHARED, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "합성엔진오일 교환 세트", "11월 04일", 145000));
+        allMaintenanceItems.add(new MaintenanceScheduleItem("maint_246_1", v2Id, "엔진오일 및 오일필터", "정비 권장 주기 1,200km 초과", "1,200km 초과", true));
+        allMaintenanceItems.add(new MaintenanceScheduleItem("maint_246_2", v2Id, "앞 브레이크 패드", "정기 점검 주기 도래 예정", "2,500km 남음", false));
+        allPendingTasks.add(new PendingTaskItem("task_246_1", v2Id, PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM, "주유 기록 확인 필요 (1건)", "11월 07일 주유 감지 내역 검토 대기", 0L));
+
+        // v3: 12가 3456 (휘발유)
+        allTrips.add(new TripRecord("trip_12ga_1", v3Id, "11월 08일 10:00", "분당 → 판교", 28.5, 40, "개인", 4800, ExpenseRecord.Ownership.MY_RECORD));
+        allExpenses.add(new ExpenseRecord("exp_12ga_1", v3Id, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.MY_RECORD, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "S-OIL 평화주유소", "11월 08일", 65000));
+        allMaintenanceItems.add(new MaintenanceScheduleItem("maint_12ga_1", v3Id, "정기 종합검사", "검사 유효기간 1개월 전", "3,500km 남음", false));
+
+        // v4: QR 연동 차량 (하이브리드)
+        allTrips.add(new TripRecord("trip_qr_1", v4Id, "11월 09일 20:10", "여의도 → 상암", 31.0, 45, "개인", 4500, ExpenseRecord.Ownership.MY_RECORD));
+        allExpenses.add(new ExpenseRecord("exp_qr_1", v4Id, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.MY_RECORD, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "현대오일뱅크 직영점", "11월 09일", 70000));
+
+        // v5: 등록 차량
+        allTrips.add(new TripRecord("trip_reg_1", v5Id, "11월 07일 14:00", "잠실 → 삼성", 12.0, 20, "공동", 2000, ExpenseRecord.Ownership.EXPLICITLY_SHARED));
+        allExpenses.add(new ExpenseRecord("exp_reg_1", v5Id, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.EXPLICITLY_SHARED, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "알뜰주유소 테헤란점", "11월 07일", 50000));
+
+        // v6: 테스트 차량 A
+        allTrips.add(new TripRecord("trip_test_1", v6Id, "11월 01일 09:11", "시드 주행 경로", 18.0, 30, "개인", 2100, ExpenseRecord.Ownership.MY_RECORD));
+        allExpenses.add(new ExpenseRecord("exp_test_1", v6Id, ExpenseRecord.Category.FUEL, ExpenseRecord.Ownership.MY_RECORD, ExpenseRecord.ConfirmationState.USER_CONFIRMED, "급속 충전 테스트", "11월 01일", 15000));
+    }
+
+    /**
+     * 백엔드 GET /mobile/vehicles 응답으로 전달된 사용자의 모든 차량(OWNER, MANAGER, MEMBER) 목록을 반영한다.
+     */
+    public synchronized void applyBackendUserVehicles(
+            @NonNull List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.BackendVehicleItem> backendVehicles
+    ) {
+        if (backendVehicles.isEmpty()) {
+            return;
+        }
+
+        boolean hasExistingSelected = false;
+        for (com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.BackendVehicleItem bv : backendVehicles) {
+            String vid = bv.vehicleId != null ? bv.vehicleId : bv.id;
+            if (vid != null && vid.equals(selectedVehicleId)) {
+                hasExistingSelected = true;
+                break;
+            }
+        }
+
+        for (com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.BackendVehicleItem bv : backendVehicles) {
+            String vid = bv.vehicleId != null ? bv.vehicleId : bv.id;
+            String name = bv.getDisplayName();
+            String fuelType = extractFuelTypeFromLabel(name);
+            String plate = extractPlateFromLabel(name);
+            boolean isShared = "MEMBER".equalsIgnoreCase(bv.role) || "MANAGER".equalsIgnoreCase(bv.role);
+
+            VehicleProfile profile = new VehicleProfile(
+                    vid,
+                    plate,
+                    fuelType,
+                    name,
+                    isShared,
+                    bv.role,
+                    bv.paired,
+                    bv.installationId
+            );
+            registerOrUpdateVehicle(profile);
+
+            // 차량별 고유 누적거리 부여 (미설정 시)
+            if (!vehicleOdometerMap.containsKey(vid)) {
+                double distinct = ((long) Math.abs(vid.hashCode()) % 45000) + 12000.0;
+                vehicleOdometerMap.put(vid, distinct);
+            }
+        }
+
+        if (!hasExistingSelected && !backendVehicles.isEmpty()) {
+            String firstVid = backendVehicles.get(0).vehicleId != null
+                    ? backendVehicles.get(0).vehicleId
+                    : backendVehicles.get(0).id;
+            selectVehicle(firstVid);
+        }
+        newUserEmptyMode = false;
     }
 
     public synchronized void registerOrUpdateVehicle(@NonNull VehicleProfile profile) {
@@ -142,7 +270,31 @@ public final class M03HomeRepository {
     }
 
     public synchronized double getLatestOdometerKm() {
-        return latestOdometerKm;
+        VehicleProfile current = getSelectedVehicle();
+        if (current == null) {
+            return 0.0;
+        }
+        String vid = current.getVehicleId();
+        if (vehicleOdometerMap.containsKey(vid)) {
+            Double val = vehicleOdometerMap.get(vid);
+            if (val != null) {
+                return val;
+            }
+        }
+        double distinctOdo = ((long) Math.abs(vid.hashCode()) % 45000) + 12450.5;
+        vehicleOdometerMap.put(vid, distinctOdo);
+        this.latestOdometerKm = distinctOdo;
+        return distinctOdo;
+    }
+
+    public synchronized double getOdometerForVehicle(@NonNull String vehicleId) {
+        if (vehicleOdometerMap.containsKey(vehicleId)) {
+            Double val = vehicleOdometerMap.get(vehicleId);
+            if (val != null) return val;
+        }
+        double distinctOdo = ((long) Math.abs(vehicleId.hashCode()) % 45000) + 12450.5;
+        vehicleOdometerMap.put(vehicleId, distinctOdo);
+        return distinctOdo;
     }
 
     public synchronized void updateSyncTimestampNow() {
@@ -177,6 +329,7 @@ public final class M03HomeRepository {
             newUserEmptyMode = false;
 
             if (homeResp.distanceKm != null && homeResp.distanceKm > 0) {
+                this.vehicleOdometerMap.put(targetVid, homeResp.distanceKm);
                 this.latestOdometerKm = homeResp.distanceKm;
             }
             if (homeResp.estimatedCostWon != null && homeResp.estimatedCostWon > 0) {
@@ -359,6 +512,12 @@ public final class M03HomeRepository {
      */
     public synchronized void selectVehicle(@NonNull String vehicleId) {
         this.selectedVehicleId = vehicleId;
+        if (vehicleOdometerMap.containsKey(vehicleId)) {
+            Double val = vehicleOdometerMap.get(vehicleId);
+            if (val != null) {
+                this.latestOdometerKm = val;
+            }
+        }
     }
 
     @NonNull

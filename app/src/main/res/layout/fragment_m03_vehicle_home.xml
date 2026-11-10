@@ -62,111 +62,128 @@
                     android:insetBottom="0dp"
                     android:minWidth="0dp"
                     android:paddingHorizontal="12dp"
-                    android:text="⇄ 변경"
+                    android:text="⇄ 목록"
                     android:textColor="@color/fuelog_text_primary"
                     android:textSize="12sp"
                     app:cornerRadius="17dp"
                     app:strokeColor="@color/fuelog_border" />
             </LinearLayout>
 
-            <!-- 선택 차량 번호판 & 차종/유종 정보 -->
+            <!-- 스와이프 가능한 차량 상단 카드 영역 (좌우 스와이프로 차량 전환) -->
             <LinearLayout
-                android:id="@+id/layout_m03_vehicle_header_info"
+                android:id="@+id/card_m03_vehicle_swipe_area"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="vertical">
 
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="52dp"
-                    android:layout_height="40dp"
-                    app:cardBackgroundColor="@color/fuelog_surface"
-                    app:cardCornerRadius="10dp"
-                    app:cardElevation="0dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:gravity="center"
-                        android:text="🚗"
-                        android:textSize="22sp" />
-                </com.google.android.material.card.MaterialCardView>
-
+                <!-- 선택 차량 번호판 & 차종/유종 정보 -->
                 <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:id="@+id/tv_m03_plate_number"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="12가 3456"
-                        android:textColor="@color/fuelog_text_primary"
-                        android:textSize="18sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/tv_m03_vehicle_subinfo"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="휘발유 · 공동 관리 차량"
-                        android:textColor="@color/fuelog_text_secondary"
-                        android:textSize="12sp" />
-                </LinearLayout>
-            </LinearLayout>
-
-            <!-- 누적 주행거리 바 -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/card_m03_odometer_bar"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                app:cardBackgroundColor="@color/fuelog_surface"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="0dp">
-
-                <LinearLayout
+                    android:id="@+id/layout_m03_vehicle_header_info"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
                     android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="12dp">
+                    android:orientation="horizontal">
 
-                    <TextView
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="52dp"
+                        android:layout_height="40dp"
+                        app:cardBackgroundColor="@color/fuelog_surface"
+                        app:cardCornerRadius="10dp"
+                        app:cardElevation="0dp">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:gravity="center"
+                            android:text="🚗"
+                            android:textSize="22sp" />
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
                         android:layout_weight="1"
-                        android:text="누적 주행거리"
-                        android:textColor="@color/fuelog_text_secondary"
-                        android:textSize="13sp" />
+                        android:orientation="vertical">
 
-                    <TextView
-                        android:id="@+id/tv_m03_odometer_value"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="42,350 km"
-                        android:textColor="@color/fuelog_text_primary"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
+                        <TextView
+                            android:id="@+id/tv_m03_plate_number"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="12가 3456"
+                            android:textColor="@color/fuelog_text_primary"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
 
-                    <TextView
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:layout_marginStart="8dp"
-                        android:background="@color/fuelog_primary"
-                        android:gravity="center"
-                        android:text="+"
-                        android:textColor="@color/white"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
+                        <TextView
+                            android:id="@+id/tv_m03_vehicle_subinfo"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="휘발유 · 공동 관리 차량"
+                            android:textColor="@color/fuelog_text_secondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
                 </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+
+                <!-- 누적 주행거리 바 -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/card_m03_odometer_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    app:cardBackgroundColor="@color/fuelog_surface"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="0dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="누적 주행거리"
+                            android:textColor="@color/fuelog_text_secondary"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/tv_m03_odometer_value"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="42,350 km"
+                            android:textColor="@color/fuelog_text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:layout_marginStart="8dp"
+                            android:background="@color/fuelog_primary"
+                            android:gravity="center"
+                            android:text="+"
+                            android:textColor="@color/white"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- 도트 인디케이터 (● ○ ○ ○ ○ ○) -->
+                <LinearLayout
+                    android:id="@+id/container_m03_dots_indicator"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center"
+                    android:orientation="horizontal" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- 예외/완료: 신규 사용자 빈 상태 카드 -->
