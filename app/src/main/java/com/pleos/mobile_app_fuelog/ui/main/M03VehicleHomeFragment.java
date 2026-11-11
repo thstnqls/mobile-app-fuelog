@@ -123,7 +123,6 @@ public class M03VehicleHomeFragment extends Fragment {
             String userId = session.getUserId();
             String instId = userCacheManager.getInstallationId(userId);
             String instSecret = userCacheManager.getInstallationSecret(userId);
-            String primaryLabel = userCacheManager.getVisibleCachedVehicleName();
 
             // 0) 백엔드 사용자의 전체 차량 목록(GET /mobile/vehicles) 조회 및 반영
             List<FuelogBackendApiClient.BackendVehicleItem> backendVehicles = apiClient.fetchMobileVehicles();
@@ -131,28 +130,23 @@ public class M03VehicleHomeFragment extends Fragment {
                 homeRepository.applyBackendUserVehicles(backendVehicles);
             }
 
-            // 1) 백엔드 차량 페어링 및 C02/C03 세션 확인 (GET /installations/me, GET /vehicle/home)
-            FuelogBackendApiClient.EndToEndVehicleSyncResult syncResult =
-                    ((instId != null && instSecret != null) || (primaryLabel != null && !primaryLabel.trim().isEmpty()))
-                            ? apiClient.authenticateAndVerifyTripUserEndToEnd(
-                                    userCacheManager,
-                                    primaryLabel != null ? primaryLabel : "QR 연동 차량"
-                            )
-                            : new FuelogBackendApiClient.EndToEndVehicleSyncResult(false, null, null, null, null, null, null, null, null);
-
-            // 2) 백엔드 차량 홈(GET /vehicle/home) 및 동기화 상태(GET /sync/status) 조회 (실제 DB의 vehicles.name 반영)
-            if (syncResult.installationSecret != null) {
-                FuelogBackendApiClient.VehicleHomeResponse homeResp =
-                        apiClient.fetchVehicleHome(syncResult.installationSecret, syncResult.scopedToken);
-                FuelogBackendApiClient.SyncStatusResponse syncStatusResp =
-                        apiClient.fetchSyncStatus(syncResult.installationSecret);
-                if (homeResp.success && homeResp.vehicleAlias != null && !homeResp.vehicleAlias.trim().isEmpty()) {
-                    userCacheManager.setRegisteredVehicleForUser(userId, homeResp.vehicleAlias.trim());
+            // 1) 백엔드 차량 홈(GET /vehicle/home) 및 동기화 상태(GET /sync/status) 조회
+            // 주의: 백그라운드 동기화 중에는 신규 차량이나 단말을 등록/생성하지 않으며, 이미 연결된 설치 자격증명이 있을 때만 안전하게 상태를 조회한다.
+            if (instId != null && instSecret != null) {
+                FuelogBackendApiClient.InstallationMeResponse instMe = apiClient.fetchInstallationMe(instId, instSecret);
+                if (instMe != null && instMe.paired && instMe.vehicleId != null) {
+                    FuelogBackendApiClient.VehicleHomeResponse homeResp =
+                            apiClient.fetchVehicleHome(instSecret, userCacheManager.getActiveScopedToken());
+                    FuelogBackendApiClient.SyncStatusResponse syncStatusResp =
+                            apiClient.fetchSyncStatus(instSecret);
+                    if (homeResp.success && homeResp.vehicleAlias != null && !homeResp.vehicleAlias.trim().isEmpty()) {
+                        userCacheManager.setRegisteredVehicleForUser(userId, homeResp.vehicleAlias.trim());
+                    }
+                    homeRepository.applyBackendVehicleHomeAndSync(instMe.vehicleId, homeResp, syncStatusResp);
                 }
-                homeRepository.applyBackendVehicleHomeAndSync(syncResult.vehicleId, homeResp, syncStatusResp);
             }
 
-            // 3) 백엔드 M06 모바일 확인함(GET /mobile/inbox) 실제 DB 데이터 조회
+            // 2) 백엔드 M06 모바일 확인함(GET /mobile/inbox) 실제 DB 데이터 조회
             FuelogBackendApiClient.InboxPageResponse page = apiClient.fetchMobileInbox(0L);
             if (page.success && !page.items.isEmpty()) {
                 homeRepository.applyBackendInboxItems(page.items);
@@ -255,14 +249,33 @@ public class M03VehicleHomeFragment extends Fragment {
         }
 
         int newIndex = currentIndex + direction;
+        // API로 조회된 차량 목록의 경계를 벗어나지 않도록 클램핑 (무한 루프 방지)
         if (newIndex < 0) {
-            newIndex = vehicles.size() - 1;
+            animateBoundaryBounce(true);
+            return;
         } else if (newIndex >= vehicles.size()) {
-            newIndex = 0;
+            animateBoundaryBounce(false);
+            return;
         }
 
         switchToVehicleByIndex(newIndex);
         animateVehicleCardTransition(direction);
+    }
+
+    private void animateBoundaryBounce(boolean isFirst) {
+        float bounceX = isFirst ? 28f : -28f;
+        binding.cardM03VehicleSwipeArea.animate()
+                .translationX(bounceX)
+                .setDuration(70)
+                .withEndAction(() -> {
+                    if (binding != null) {
+                        binding.cardM03VehicleSwipeArea.animate()
+                                .translationX(0f)
+                                .setDuration(90)
+                                .start();
+                    }
+                })
+                .start();
     }
 
     private void switchToVehicleByIndex(int index) {
@@ -288,11 +301,6 @@ public class M03VehicleHomeFragment extends Fragment {
         }
 
         renderDashboard();
-        Snackbar.make(binding.getRoot(),
-                "'" + selected.getDisplayName() + "' (" + (index + 1) + "/" + vehicles.size() + ")",
-                Snackbar.LENGTH_SHORT).show();
-
-        syncInboxFromBackend();
     }
 
     private void animateVehicleCardTransition(int direction) {

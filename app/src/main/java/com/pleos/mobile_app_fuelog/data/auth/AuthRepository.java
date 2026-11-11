@@ -24,6 +24,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -677,6 +678,19 @@ public final class AuthRepository {
         try {
             saveSessionToPrefs(new AuthSession(userId, "", accessToken, "", (System.currentTimeMillis() / 1000L) + 3600L, true));
             FuelogBackendApiClient client = FuelogBackendApiClient.getInstance(this);
+
+            // 0) 백엔드 GET /mobile/vehicles 조회로 사용자의 실제 차량 존재 및 첫 번째 차량명 반영
+            List<FuelogBackendApiClient.BackendVehicleItem> mobileVehicles = client.fetchMobileVehicles();
+            if (!mobileVehicles.isEmpty()) {
+                FuelogBackendApiClient.BackendVehicleItem first = mobileVehicles.get(0);
+                String vid = first.vehicleId != null ? first.vehicleId : first.id;
+                String name = first.getDisplayName();
+                if (vid != null) {
+                    userCacheManager.setRegisteredVehicleUuid(userId, vid);
+                }
+                userCacheManager.setRegisteredVehicleForUser(userId, name);
+                return true;
+            }
 
             // 1) 저장된 설치 자격 증명이 있으면 백엔드 GET /installations/me 및 GET /vehicle/home 조회
             String instId = userCacheManager.getInstallationId(userId);
