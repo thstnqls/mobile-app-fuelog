@@ -43,7 +43,6 @@
                     android:id="@+id/tv_m03_sync_status"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
                     android:background="@color/fuelog_info_bg"
                     android:clickable="true"
                     android:focusable="true"
@@ -52,21 +51,6 @@
                     android:text="온라인 동기화"
                     android:textColor="@color/fuelog_text_secondary"
                     android:textSize="11sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_m03_change_vehicle"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="34dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:minWidth="0dp"
-                    android:paddingHorizontal="12dp"
-                    android:text="⇄ 목록"
-                    android:textColor="@color/fuelog_text_primary"
-                    android:textSize="12sp"
-                    app:cornerRadius="17dp"
-                    app:strokeColor="@color/fuelog_border" />
             </LinearLayout>
 
             <!-- 스와이프 가능한 차량 상단 카드 영역 (좌우 스와이프로 차량 전환) -->

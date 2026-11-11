@@ -158,10 +158,6 @@ public class M03VehicleHomeFragment extends Fragment {
     }
 
     private void setupHeaderActions() {
-        // 우측 상단 [⇄ 목록] 버튼 및 차량 헤더 정보 탭 시 차량 전환 다이얼로그 노출
-        binding.btnM03ChangeVehicle.setOnClickListener(v -> showVehicleSwitcherDialog());
-        binding.layoutM03VehicleHeaderInfo.setOnClickListener(v -> showVehicleSwitcherDialog());
-
         // 상단 차량 카드 영역 좌우 스와이프 제스처 설정
         setupVehicleSwipeGesture();
 
@@ -211,12 +207,6 @@ public class M03VehicleHomeFragment extends Fragment {
                     }
                 }
                 return false;
-            }
-
-            @Override
-            public boolean onSingleTapConfirmed(MotionEvent e) {
-                showVehicleSwitcherDialog();
-                return true;
             }
         });
 
@@ -444,7 +434,7 @@ public class M03VehicleHomeFragment extends Fragment {
         binding.cardM03EmptyState.setVisibility(View.GONE);
         binding.layoutM03DashboardContent.setVisibility(View.VISIBLE);
 
-        binding.tvM03PlateNumber.setText(selectedVehicle.getDisplayName() + " ▾");
+        binding.tvM03PlateNumber.setText(selectedVehicle.getDisplayName());
         binding.tvM03VehicleSubinfo.setText(
                 selectedVehicle.getFuelType()
                         + (selectedVehicle.isSharedVehicle() ? " · 공동 관리 차량" : " · 개인 전용 차량")
