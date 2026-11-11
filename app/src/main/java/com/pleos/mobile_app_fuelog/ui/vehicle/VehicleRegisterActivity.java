@@ -324,25 +324,13 @@ public class VehicleRegisterActivity extends AppCompatActivity {
 
         Executors.newSingleThreadExecutor().execute(() -> {
             FuelogBackendApiClient client = FuelogBackendApiClient.getInstance(authRepository);
-            String instId = userCacheManager.getInstallationId(session.getUserId());
-            String instSecret = userCacheManager.getInstallationSecret(session.getUserId());
+            FuelogBackendApiClient.EndToEndVehicleSyncResult result =
+                    client.confirmQrPairingWithCode(userCacheManager, reqId, confirmationCode, preferredAlias);
 
-            if (instId == null || instSecret == null) {
-                FuelogBackendApiClient.InstallationIssuedResponse newInst = client.createInstallation();
-                if (newInst != null) {
-                    instId = newInst.installationId;
-                    instSecret = newInst.installationSecret;
-                    userCacheManager.setInstallationCredentials(session.getUserId(), instId, instSecret);
-                }
-            }
-
-            FuelogBackendApiClient.PairingStatusResponse confirmed =
-                    (instId != null && instSecret != null)
-                            ? client.confirmPairingRequest(instId, instSecret, reqId, confirmationCode)
-                            : new FuelogBackendApiClient.PairingStatusResponse(500, null, "FAILED", null, null, null, "설치 자격 증명 발급 실패");
-
-            String vehicleId = confirmed.vehicleId;
-            String vehicleName = confirmed.selectedVehicleName != null ? confirmed.selectedVehicleName : preferredAlias;
+            String vehicleId = result.vehicleId;
+            String vehicleName = result.vehicleName != null && !result.vehicleName.isEmpty()
+                    ? result.vehicleName
+                    : preferredAlias;
 
             runOnUiThread(() -> {
                 if (isFinishing() || binding == null) return;
@@ -350,7 +338,7 @@ public class VehicleRegisterActivity extends AppCompatActivity {
                 isCheckingCode = false;
                 binding.layoutRegisterCodeLoading.setVisibility(View.GONE);
 
-                if (confirmed.isSuccess() && vehicleId != null) {
+                if (result.success && vehicleId != null) {
                     if (codeCountDownTimer != null) {
                         codeCountDownTimer.cancel();
                         codeCountDownTimer = null;

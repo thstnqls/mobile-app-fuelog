@@ -462,6 +462,7 @@ public final class FuelogBackendApiClient {
             conn.setDoOutput(true);
             JSONObject payload = new JSONObject();
             payload.put("confirmation_code", confirmationCode);
+            payload.put("confirmationCode", confirmationCode);
             writeBody(conn, payload.toString());
 
             int status = conn.getResponseCode();
@@ -500,6 +501,7 @@ public final class FuelogBackendApiClient {
             conn.setDoOutput(true);
             JSONObject payload = new JSONObject();
             payload.put("confirmation_code", confirmationCode);
+            payload.put("confirmationCode", confirmationCode);
             writeBody(conn, payload.toString());
 
             int status = conn.getResponseCode();
@@ -2109,6 +2111,257 @@ public final class FuelogBackendApiClient {
             );
         } catch (Exception e) {
             return new FuelCandidateDetailResponse(true, status, fallbackId, "CANDIDATE", 1L, false, null, null, null, Collections.emptyList(), null, null, null, null, null, null, null, null);
+        }
+    }
+
+    // =========================================================================
+    // 6-2. [M11 / M12 정비 계획 및 이력 API (MobileMaintenanceController 연동)]
+    // =========================================================================
+
+    public static final class MaintenanceEventItem {
+        public final String id;
+        public final String itemId;
+        public final String serviceDate;
+        public final Double odometerKm;
+        public final String status;
+        public final boolean shared;
+        public final boolean detailsShared;
+        public final long cost;
+        public final String currency;
+        @Nullable public final String memo;
+        @Nullable public final String shop;
+        @Nullable public final String receiptUrl;
+
+        public MaintenanceEventItem(
+                String id, String itemId, String serviceDate, Double odometerKm,
+                String status, boolean shared, boolean detailsShared,
+                long cost, String currency, @Nullable String memo, @Nullable String shop, @Nullable String receiptUrl
+        ) {
+            this.id = id;
+            this.itemId = itemId;
+            this.serviceDate = serviceDate;
+            this.odometerKm = odometerKm;
+            this.status = status;
+            this.shared = shared;
+            this.detailsShared = detailsShared;
+            this.cost = cost;
+            this.currency = currency;
+            this.memo = memo;
+            this.shop = shop;
+            this.receiptUrl = receiptUrl;
+        }
+    }
+
+    public static final class MaintenancePlanItem {
+        public final String id;
+        public final String name;
+        public final boolean shared;
+        public final boolean active;
+        @Nullable public final Double intervalKm;
+        @Nullable public final Integer intervalMonths;
+        public final long revision;
+
+        public MaintenancePlanItem(
+                String id, String name, boolean shared, boolean active,
+                @Nullable Double intervalKm, @Nullable Integer intervalMonths, long revision
+        ) {
+            this.id = id;
+            this.name = name;
+            this.shared = shared;
+            this.active = active;
+            this.intervalKm = intervalKm;
+            this.intervalMonths = intervalMonths;
+            this.revision = revision;
+        }
+    }
+
+    /**
+     * GET /mobile/vehicles/{vehicleId}/maintenance-events — 차량 정비 이력 목록 조회
+     */
+    @NonNull
+    public List<MaintenanceEventItem> fetchMaintenanceEvents(@NonNull String vehicleId) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return Collections.emptyList();
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + vehicleId + "/maintenance-events", "GET", token);
+            int status = conn.getResponseCode();
+            String body = readBody(conn, status >= 400);
+            if (status >= 200 && status < 300) {
+                JSONObject root = new JSONObject(body);
+                JSONArray arr = root.optJSONArray("items");
+                List<MaintenanceEventItem> list = new ArrayList<>();
+                if (arr != null) {
+                    for (int i = 0; i < arr.length(); i++) {
+                        JSONObject obj = arr.getJSONObject(i);
+                        String id = obj.optString("id", "");
+                        String itemId = obj.optString("itemId", "");
+                        String serviceDate = obj.optString("serviceDate", "");
+                        Double odo = obj.isNull("odometerKm") ? null : obj.optDouble("odometerKm");
+                        String eventStatus = obj.optString("status", "CONFIRMED");
+                        boolean shared = obj.optBoolean("shared", true);
+                        boolean detailsShared = obj.optBoolean("detailsShared", false);
+                        long cost = 0L;
+                        String currency = "KRW";
+                        String memo = null;
+                        String shop = null;
+                        String receiptUrl = null;
+                        JSONObject details = obj.optJSONObject("details");
+                        if (details != null) {
+                            cost = details.optLong("cost", 0L);
+                            currency = details.optString("currency", "KRW");
+                            memo = details.isNull("memo") ? null : details.optString("memo");
+                            shop = details.isNull("shop") ? null : details.optString("shop");
+                            receiptUrl = details.isNull("receiptUrl") ? null : details.optString("receiptUrl");
+                        }
+                        list.add(new MaintenanceEventItem(
+                                id, itemId, serviceDate, odo, eventStatus, shared, detailsShared,
+                                cost, currency, memo, shop, receiptUrl
+                        ));
+                    }
+                }
+                SafeLogger.i("GET /mobile/vehicles/" + vehicleId + "/maintenance-events 성공: " + list.size() + "건 수신");
+                return list;
+            }
+        } catch (Exception e) {
+            SafeLogger.w("GET maintenance-events 예외: " + e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * GET /mobile/vehicles/{vehicleId}/maintenance-plans — 차량 정비 계획 목록 조회
+     */
+    @NonNull
+    public List<MaintenancePlanItem> fetchMaintenancePlans(@NonNull String vehicleId) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return Collections.emptyList();
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + vehicleId + "/maintenance-plans", "GET", token);
+            int status = conn.getResponseCode();
+            String body = readBody(conn, status >= 400);
+            if (status >= 200 && status < 300) {
+                JSONObject root = new JSONObject(body);
+                JSONArray arr = root.optJSONArray("items");
+                List<MaintenancePlanItem> list = new ArrayList<>();
+                if (arr != null) {
+                    for (int i = 0; i < arr.length(); i++) {
+                        JSONObject obj = arr.getJSONObject(i);
+                        String id = obj.optString("id", "");
+                        String name = obj.optString("name", "");
+                        boolean shared = obj.optBoolean("shared", true);
+                        boolean active = obj.optBoolean("active", true);
+                        Double intervalKm = obj.isNull("intervalKm") ? null : obj.optDouble("intervalKm");
+                        Integer intervalMonths = obj.isNull("intervalMonths") ? null : obj.optInt("intervalMonths");
+                        long rev = obj.optLong("revision", 1L);
+                        list.add(new MaintenancePlanItem(id, name, shared, active, intervalKm, intervalMonths, rev));
+                    }
+                }
+                return list;
+            }
+        } catch (Exception e) {
+            SafeLogger.w("GET maintenance-plans 예외: " + e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 특정 정비 항목(예: 엔진오일, 와이퍼 등)에 해당하는 정비 계획 UUID를 반환하거나 없으면 생성한다.
+     */
+    @NonNull
+    public String ensureMaintenancePlanId(@NonNull String vehicleId, @NonNull String itemName) {
+        List<MaintenancePlanItem> plans = fetchMaintenancePlans(vehicleId);
+        for (MaintenancePlanItem p : plans) {
+            if (p.name.equalsIgnoreCase(itemName)) {
+                return p.id;
+            }
+        }
+        String newPlanId = UUID.randomUUID().toString();
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return newPlanId;
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + vehicleId + "/maintenance-plans/" + newPlanId, "PUT", token);
+            conn.setDoOutput(true);
+            JSONObject payload = new JSONObject();
+            payload.put("name", itemName);
+            payload.put("shared", true);
+            payload.put("basis", "USER");
+            payload.put("intervalKm", 10000.0);
+            payload.put("intervalMonths", 12);
+            writeBody(conn, payload.toString());
+            int status = conn.getResponseCode();
+            if (status >= 200 && status < 300) {
+                SafeLogger.i("PUT maintenance-plans 성공: " + itemName + " (id=" + newPlanId + ")");
+            }
+        } catch (Exception e) {
+            SafeLogger.w("PUT maintenance-plans 예외: " + e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+        return newPlanId;
+    }
+
+    /**
+     * POST /mobile/vehicles/{vehicleId}/maintenance-events — 차량 정비 기록 신규 등록
+     */
+    public boolean createMaintenanceEvent(
+            @NonNull String vehicleId,
+            @NonNull String itemName,
+            @NonNull String serviceDate,
+            @Nullable Double odometerKm,
+            long costWon,
+            @Nullable String shop,
+            @Nullable String memo
+    ) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return false;
+        }
+        String itemId = ensureMaintenancePlanId(vehicleId, itemName);
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + vehicleId + "/maintenance-events", "POST", token);
+            conn.setRequestProperty("Idempotency-Key", UUID.randomUUID().toString());
+            conn.setDoOutput(true);
+            JSONObject payload = new JSONObject();
+            payload.put("itemId", itemId);
+            payload.put("serviceDate", serviceDate);
+            if (odometerKm != null && odometerKm >= 0.0) {
+                payload.put("odometerKm", odometerKm);
+            }
+            payload.put("status", "CONFIRMED");
+            payload.put("shared", true);
+            payload.put("detailsShared", true);
+            payload.put("cost", (double) costWon);
+            payload.put("currency", "KRW");
+            if (shop != null && !shop.trim().isEmpty()) {
+                payload.put("shop", shop.trim());
+            }
+            if (memo != null && !memo.trim().isEmpty()) {
+                payload.put("memo", memo.trim());
+            }
+            writeBody(conn, payload.toString());
+            int status = conn.getResponseCode();
+            String respBody = readBody(conn, status >= 400);
+            SafeLogger.i("POST maintenance-events status=" + status + ", body=" + respBody);
+            return status >= 200 && status < 300;
+        } catch (Exception e) {
+            SafeLogger.w("POST maintenance-events 예외: " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
         }
     }
 

@@ -402,6 +402,59 @@ public final class M03HomeRepository {
         }
     }
 
+    /**
+     * 백엔드 GET /mobile/vehicles/{vehicleId}/maintenance-events 응답(실제 DB 정비 이력)을 지출 목록에 반영한다.
+     */
+    public synchronized void applyBackendMaintenanceEvents(
+            @NonNull String vehicleId,
+            @NonNull List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenanceEventItem> events
+    ) {
+        if (events.isEmpty()) {
+            return;
+        }
+
+        // 기존 DB 유래 정비 레코드 제거 후 최신 동기화 반영
+        for (int i = allExpenses.size() - 1; i >= 0; i--) {
+            ExpenseRecord e = allExpenses.get(i);
+            if (vehicleId.equals(e.getVehicleId()) && e.getRecordId().startsWith("maint_db_")) {
+                allExpenses.remove(i);
+            }
+        }
+
+        for (com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenanceEventItem ev : events) {
+            String title = (ev.shop != null && !ev.shop.trim().isEmpty())
+                    ? ev.shop.trim() + " (" + (ev.memo != null ? ev.memo : "정비") + ")"
+                    : (ev.memo != null && !ev.memo.trim().isEmpty() ? ev.memo.trim() : "차량 정비 소모품 교환");
+
+            String dateLabel = "최근";
+            if (ev.serviceDate != null && ev.serviceDate.length() >= 10) {
+                dateLabel = ev.serviceDate.substring(5, 7) + "월 " + ev.serviceDate.substring(8, 10) + "일";
+            }
+
+            ExpenseRecord record = new ExpenseRecord(
+                    "maint_db_" + ev.id,
+                    vehicleId,
+                    ExpenseRecord.Category.MAINTENANCE,
+                    ExpenseRecord.Ownership.MY_RECORD,
+                    ExpenseRecord.ConfirmationState.USER_CONFIRMED,
+                    title,
+                    dateLabel,
+                    ev.cost
+            );
+            addExpenseRecord(record);
+
+            if (ev.odometerKm != null && ev.odometerKm > 0) {
+                double currentOdo = getOdometerForVehicle(vehicleId);
+                if (ev.odometerKm > currentOdo) {
+                    vehicleOdometerMap.put(vehicleId, ev.odometerKm);
+                    if (vehicleId.equals(selectedVehicleId)) {
+                        this.latestOdometerKm = ev.odometerKm;
+                    }
+                }
+            }
+        }
+    }
+
     @NonNull
     public synchronized String getLastSyncedTimestamp() {
         return lastSyncedTimestamp;
