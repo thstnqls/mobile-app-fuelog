@@ -147,6 +147,9 @@ public final class M03HomeRepository {
         if (!hasExistingSelected && !vehicles.isEmpty()) {
             selectedVehicleId = vehicles.get(0).getVehicleId();
         }
+        for (VehicleProfile p : vehicles) {
+            ensureSampleExpensesAndTasksForVehicle(p.getVehicleId(), p.getDisplayName(), p.getFuelType());
+        }
         newUserEmptyMode = false;
     }
 
@@ -433,15 +436,18 @@ public final class M03HomeRepository {
 
     @Nullable
     public synchronized VehicleProfile getSelectedVehicle() {
-        if (newUserEmptyMode || selectedVehicleId == null) {
+        if (newUserEmptyMode || vehicles.isEmpty()) {
             return null;
         }
-        for (VehicleProfile v : vehicles) {
-            if (v.getVehicleId().equals(selectedVehicleId)) {
-                return v;
+        if (selectedVehicleId != null) {
+            for (VehicleProfile v : vehicles) {
+                if (v.getVehicleId().equals(selectedVehicleId)) {
+                    return v;
+                }
             }
         }
-        return vehicles.isEmpty() ? null : vehicles.get(0);
+        selectedVehicleId = vehicles.get(0).getVehicleId();
+        return vehicles.get(0);
     }
 
     /**
@@ -574,6 +580,142 @@ public final class M03HomeRepository {
             }
         }
         return result;
+    }
+
+    /**
+     * 차량별 지출/작업/운행 데이터가 비어있을 경우 현실적인 기본 지출 및 주유 확인 작업을 채워준다.
+     */
+    public synchronized void ensureSampleExpensesAndTasksForVehicle(
+            @NonNull String vehicleId,
+            @NonNull String displayName,
+            @NonNull String fuelType
+    ) {
+        boolean hasExpense = false;
+        for (ExpenseRecord e : allExpenses) {
+            if (vehicleId.equals(e.getVehicleId())) {
+                hasExpense = true;
+                break;
+            }
+        }
+        if (!hasExpense) {
+            String cleanName = displayName.toLowerCase(Locale.ROOT);
+            boolean isEv = "전기".equals(fuelType) || cleanName.contains("아이오닉") || cleanName.contains("ev") || cleanName.contains("전기");
+            if (isEv) {
+                allExpenses.add(new ExpenseRecord(
+                        "exp_fuel_1_" + vehicleId,
+                        vehicleId,
+                        ExpenseRecord.Category.FUEL,
+                        ExpenseRecord.Ownership.MY_RECORD,
+                        ExpenseRecord.ConfirmationState.USER_CONFIRMED,
+                        "급속 충전 (환경부 초고속)",
+                        "11월 06일",
+                        45000L
+                ));
+                allExpenses.add(new ExpenseRecord(
+                        "exp_fuel_2_" + vehicleId,
+                        vehicleId,
+                        ExpenseRecord.Category.FUEL,
+                        ExpenseRecord.Ownership.MY_RECORD,
+                        ExpenseRecord.ConfirmationState.USER_CONFIRMED,
+                        "완속 충전 (아파트 충전기)",
+                        "11월 02일",
+                        32000L
+                ));
+                allExpenses.add(new ExpenseRecord(
+                        "exp_maint_1_" + vehicleId,
+                        vehicleId,
+                        ExpenseRecord.Category.MAINTENANCE,
+                        ExpenseRecord.Ownership.MY_RECORD,
+                        ExpenseRecord.ConfirmationState.USER_CONFIRMED,
+                        "에어컨 필터 점검 및 교체",
+                        "11월 01일",
+                        28000L
+                ));
+            } else {
+                allExpenses.add(new ExpenseRecord(
+                        "exp_fuel_1_" + vehicleId,
+                        vehicleId,
+                        ExpenseRecord.Category.FUEL,
+                        ExpenseRecord.Ownership.MY_RECORD,
+                        ExpenseRecord.ConfirmationState.USER_CONFIRMED,
+                        "GS칼텍스 삼거리주유소",
+                        "11월 08일",
+                        85000L
+                ));
+                allExpenses.add(new ExpenseRecord(
+                        "exp_fuel_2_" + vehicleId,
+                        vehicleId,
+                        ExpenseRecord.Category.FUEL,
+                        ExpenseRecord.Ownership.MY_RECORD,
+                        ExpenseRecord.ConfirmationState.USER_CONFIRMED,
+                        "SK에너지 직영주유소",
+                        "11월 03일",
+                        68000L
+                ));
+                allExpenses.add(new ExpenseRecord(
+                        "exp_maint_1_" + vehicleId,
+                        vehicleId,
+                        ExpenseRecord.Category.MAINTENANCE,
+                        ExpenseRecord.Ownership.MY_RECORD,
+                        ExpenseRecord.ConfirmationState.USER_CONFIRMED,
+                        "엔진오일 교환 세트",
+                        "11월 01일",
+                        65000L
+                ));
+            }
+        }
+
+        // Pending task for M07 Fuel confirm banner
+        boolean hasPendingFuel = false;
+        for (PendingTaskItem t : allPendingTasks) {
+            if (vehicleId.equals(t.getVehicleId()) && t.getDestination() == PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM) {
+                hasPendingFuel = true;
+                break;
+            }
+        }
+        if (!hasPendingFuel) {
+            allPendingTasks.add(new PendingTaskItem(
+                    "pending_fuel_" + vehicleId,
+                    vehicleId,
+                    PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM,
+                    "주유 기록 확인 필요 (1건)",
+                    "방금 감지된 주유 내역을 확인해 주세요.",
+                    0L
+            ));
+        }
+
+        // Trip records if empty
+        boolean hasTrips = false;
+        for (TripRecord tr : allTrips) {
+            if (vehicleId.equals(tr.getVehicleId())) {
+                hasTrips = true;
+                break;
+            }
+        }
+        if (!hasTrips) {
+            allTrips.add(new TripRecord(
+                    "trip_1_" + vehicleId,
+                    vehicleId,
+                    "11월 10일 18:20",
+                    "집 → 회사 (출근)",
+                    22.4,
+                    35,
+                    "개인",
+                    3200L,
+                    ExpenseRecord.Ownership.MY_RECORD
+            ));
+            allTrips.add(new TripRecord(
+                    "trip_2_" + vehicleId,
+                    vehicleId,
+                    "11월 09일 08:45",
+                    "회사 → 본가 (퇴근)",
+                    18.1,
+                    28,
+                    "개인",
+                    2600L,
+                    ExpenseRecord.Ownership.MY_RECORD
+            ));
+        }
     }
 
     @NonNull

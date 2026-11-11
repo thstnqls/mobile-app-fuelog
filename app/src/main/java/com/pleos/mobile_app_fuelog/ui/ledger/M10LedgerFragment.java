@@ -12,13 +12,17 @@ import androidx.navigation.fragment.NavHostFragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.google.android.material.snackbar.Snackbar;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.pleos.mobile_app_fuelog.R;
 import com.pleos.mobile_app_fuelog.data.auth.AuthRepository;
+import com.pleos.mobile_app_fuelog.data.auth.AuthSession;
 import com.pleos.mobile_app_fuelog.data.cache.UserCacheManager;
 import com.pleos.mobile_app_fuelog.data.home.ExpenseRecord;
 import com.pleos.mobile_app_fuelog.data.home.M03HomeRepository;
 import com.pleos.mobile_app_fuelog.data.home.MonthlyExpenseSummary;
 import com.pleos.mobile_app_fuelog.data.home.PendingTaskItem;
+import com.pleos.mobile_app_fuelog.data.home.VehicleProfile;
+import com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient;
 import com.pleos.mobile_app_fuelog.databinding.FragmentM10LedgerBinding;
 
 import java.text.NumberFormat;
@@ -63,17 +67,55 @@ public class M10LedgerFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        renderLedgerData();
+        if (homeRepository.getVehicles().isEmpty()) {
+            new Thread(() -> {
+                try {
+                    FuelogBackendApiClient apiClient = FuelogBackendApiClient.getInstance(authRepository);
+                    List<FuelogBackendApiClient.BackendVehicleItem> backendVehicles = apiClient.fetchMobileVehicles();
+                    if (backendVehicles != null && !backendVehicles.isEmpty()) {
+                        homeRepository.applyBackendUserVehicles(backendVehicles);
+                    }
+                } catch (Exception ignored) {
+                }
+                if (isAdded() && getActivity() != null) {
+                    getActivity().runOnUiThread(this::renderLedgerData);
+                }
+            }).start();
+        } else {
+            renderLedgerData();
+        }
     }
 
     private void setupViews() {
-        // 차량명 라벨
-        String cachedVehicleName = userCacheManager.getVisibleCachedVehicleName();
-        if (cachedVehicleName != null && !cachedVehicleName.isEmpty()) {
-            binding.textLedgerVehicleName.setText(cachedVehicleName);
-        } else {
-            binding.textLedgerVehicleName.setText("플레오스 연동 차량");
-        }
+        // 차량명 라벨 탭 시 차량 변경 다이얼로그 (다차량 보유 시)
+        binding.textLedgerVehicleName.setOnClickListener(v -> {
+            List<VehicleProfile> vehicles = homeRepository.getVehicles();
+            if (vehicles.size() > 1) {
+                String[] names = new String[vehicles.size()];
+                int checkedItem = 0;
+                VehicleProfile cur = homeRepository.getSelectedVehicle();
+                for (int i = 0; i < vehicles.size(); i++) {
+                    names[i] = vehicles.get(i).getDisplayName();
+                    if (cur != null && vehicles.get(i).getVehicleId().equals(cur.getVehicleId())) {
+                        checkedItem = i;
+                    }
+                }
+                new MaterialAlertDialogBuilder(requireContext())
+                        .setTitle("차계부 차량 선택")
+                        .setSingleChoiceItems(names, checkedItem, (dialog, which) -> {
+                            VehicleProfile picked = vehicles.get(which);
+                            homeRepository.selectVehicle(picked.getVehicleId());
+                            AuthSession session = authRepository.getCurrentValidSession();
+                            if (session != null) {
+                                userCacheManager.setRegisteredVehicleForUser(session.getUserId(), picked.getDisplayName());
+                            }
+                            renderLedgerData();
+                            dialog.dismiss();
+                        })
+                        .setNegativeButton("닫기", null)
+                        .show();
+            }
+        });
 
         // 빠른 등록 버튼 -> M07 수동 등록 모드
         binding.btnQuickAddExpense.setOnClickListener(v -> {
@@ -99,7 +141,31 @@ public class M10LedgerFragment extends Fragment {
     }
 
     private void renderLedgerData() {
+        if (binding == null) {
+            return;
+        }
+
+        VehicleProfile current = homeRepository.getSelectedVehicle();
+        if (current != null) {
+            binding.textLedgerVehicleName.setText(current.getDisplayName());
+        } else {
+            String cachedVehicleName = userCacheManager.getVisibleCachedVehicleName();
+            if (cachedVehicleName != null && !cachedVehicleName.isEmpty()) {
+                binding.textLedgerVehicleName.setText(cachedVehicleName);
+            } else {
+                binding.textLedgerVehicleName.setText("플레오스 연동 차량");
+            }
+        }
+
         List<ExpenseRecord> expenses = homeRepository.getConfirmedExpensesForSelectedVehicle();
+        if (expenses.isEmpty() && current != null) {
+            homeRepository.ensureSampleExpensesAndTasksForVehicle(
+                    current.getVehicleId(),
+                    current.getDisplayName(),
+                    current.getFuelType()
+            );
+            expenses = homeRepository.getConfirmedExpensesForSelectedVehicle();
+        }
 
         long fuelSum = 0L;
         long maintSum = 0L;
