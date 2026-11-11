@@ -1,5 +1,7 @@
 package com.pleos.mobile_app_fuelog.ui.main;
 
+import android.app.Activity;
+import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -41,6 +43,7 @@ import com.pleos.mobile_app_fuelog.data.home.TripRecord;
 import com.pleos.mobile_app_fuelog.data.home.VehicleProfile;
 import com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient;
 import com.pleos.mobile_app_fuelog.ui.auth.M01LoginFragment;
+import com.pleos.mobile_app_fuelog.ui.vehicle.VehicleRegisterActivity;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -67,6 +70,13 @@ public class M03VehicleHomeFragment extends Fragment {
 
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), this::onPermissionsResult);
+
+    private final ActivityResultLauncher<Intent> registerVehicleLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == Activity.RESULT_OK) {
+                    syncInboxFromBackend();
+                }
+            });
 
     @Override
     public View onCreateView(
@@ -172,7 +182,7 @@ public class M03VehicleHomeFragment extends Fragment {
         });
 
         binding.btnM03EmptyRegisterVehicle.setOnClickListener(v ->
-                NavHostFragment.findNavController(this).navigate(R.id.nav_m02_no_vehicle)
+                registerVehicleLauncher.launch(new Intent(requireContext(), VehicleRegisterActivity.class))
         );
     }
 
@@ -329,7 +339,7 @@ public class M03VehicleHomeFragment extends Fragment {
     private void showVehicleSwitcherDialog() {
         List<VehicleProfile> vehicles = homeRepository.getVehicles();
         if (vehicles.isEmpty()) {
-            NavHostFragment.findNavController(this).navigate(R.id.nav_m02_no_vehicle);
+            registerVehicleLauncher.launch(new Intent(requireContext(), VehicleRegisterActivity.class));
             return;
         }
 
@@ -380,7 +390,7 @@ public class M03VehicleHomeFragment extends Fragment {
                         // 차량 전환 시 해당 차량의 데이터로 재동기화
                         syncInboxFromBackend();
                     } else if (which == vehicles.size()) {
-                        NavHostFragment.findNavController(this).navigate(R.id.nav_m02_no_vehicle);
+                        registerVehicleLauncher.launch(new Intent(requireContext(), VehicleRegisterActivity.class));
                     } else {
                         authRepository.signOut();
                         navigateBackToM01();

@@ -51,6 +51,12 @@
                     android:scheme="fuelog" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.vehicle.VehicleRegisterActivity"
+            android:exported="false"
+            android:label="차량 등록"
+            android:theme="@style/Theme.Mobileappfuelog.NoActionBar" />
     </application>
 
 </manifest>
