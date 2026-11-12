@@ -7,7 +7,7 @@
         <DropdownSelection timestamp="2026-11-10T12:57:00.147738Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=b085e47" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=/Users/sonsubin/.android/avd/Medium_Phone.avd" />
             </handle>
           </Target>
         </DropdownSelection>

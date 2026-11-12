@@ -36,6 +36,58 @@ public class MainActivity extends AppCompatActivity {
     private UserCacheManager userCacheManager;
     private NavController navController;
 
+    private final android.os.Handler connectionHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final java.util.concurrent.ExecutorService connectionExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private boolean connectionVisible, connectionChecking;
+    private String disconnectedVehicle = "";
+    private final Runnable connectionCheck = new Runnable() {
+        @Override public void run() {
+            if (!connectionVisible) return;
+            AuthSession session = authRepository.getCurrentValidSession();
+            String vehicle = session == null ? null : userCacheManager.getRegisteredVehicleUuid(session.getUserId());
+            if (!connectionChecking && vehicle != null) {
+                connectionChecking = true;
+                String user = session.getUserId();
+                connectionExecutor.execute(() -> {
+                    Boolean paired = com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.getInstance(authRepository).vehicleConnectionState(vehicle, userCacheManager);
+                    connectionHandler.post(() -> {
+                        connectionChecking = false;
+                        AuthSession current = authRepository.getCurrentValidSession();
+                        if (!connectionVisible || current == null || !user.equals(current.getUserId())
+                                || !vehicle.equals(userCacheManager.getRegisteredVehicleUuid(user))) return;
+                        if (Boolean.TRUE.equals(paired)) disconnectedVehicle = "";
+                        if (Boolean.FALSE.equals(paired) && !vehicle.equals(disconnectedVehicle)) {
+                            disconnectedVehicle = vehicle;
+                            userCacheManager.setActiveScopedToken(null);
+                            userCacheManager.setActiveConsentId(null);
+                            userCacheManager.setActiveCandidateId(null);
+                            com.pleos.mobile_app_fuelog.data.connection.M04DriverConnectionCoordinator.getInstance().onServerDisconnected();
+                            navController.navigate(R.id.nav_m04_driver_connection, null,
+                                    new NavOptions.Builder().setPopUpTo(R.id.mobile_navigation, false).build());
+                            Snackbar.make(binding.getRoot(), "차량 연결이 해제되었습니다. QR로 다시 연결해 주세요.", Snackbar.LENGTH_LONG).show();
+                        }
+                    });
+                });
+            }
+            connectionHandler.postDelayed(this, 5000);
+        }
+    };
+
+    @Override protected void onStart() {
+        super.onStart();
+        connectionVisible = true;
+        connectionHandler.post(connectionCheck);
+    }
+    @Override protected void onStop() {
+        connectionVisible = false;
+        connectionHandler.removeCallbacks(connectionCheck);
+        super.onStop();
+    }
+    @Override protected void onDestroy() {
+        connectionExecutor.shutdownNow();
+        super.onDestroy();
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

@@ -111,6 +111,16 @@ public final class M04DriverConnectionCoordinator {
     /**
      * 예외/완료: 권한 철회 시 즉시 인증 해제.
      */
+    public synchronized void onServerDisconnected() {
+        fuelogAppAuthenticated = false;
+        requestSentWaitingAck = false;
+        deferredUntilStopped = false;
+        activeBoundPhoneDeviceId = null;
+        latestIssuedProof = null;
+        currentStage = M04ConnectionStage.CONNECTING;
+        statusDetailMessage = "서버에서 차량 연결이 해제되었습니다. 차량 QR을 다시 인식해 주세요.";
+    }
+
     public synchronized void onPermissionRevoked() {
         this.fuelogAppAuthenticated = false;
         this.requestSentWaitingAck = false;

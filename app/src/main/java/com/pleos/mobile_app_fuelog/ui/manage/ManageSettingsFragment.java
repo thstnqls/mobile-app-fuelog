@@ -76,6 +76,29 @@ public class ManageSettingsFragment extends Fragment {
         loginViewModel.init(authRepository);
         coordinator = M04DriverConnectionCoordinator.getInstance();
 
+        com.google.android.material.button.MaterialButton disconnect = new com.google.android.material.button.MaterialButton(requireContext());
+        disconnect.setText("차량 연결 끊기");
+        ((ViewGroup) binding.rowManageLogout.getParent()).addView(disconnect);
+        String disconnectOperation = java.util.UUID.randomUUID().toString();
+        disconnect.setOnClickListener(v -> new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("차량 연결을 끊을까요?")
+                .setMessage("차량에서도 사용자 연결이 해제됩니다. 저장된 기록은 유지됩니다.")
+                .setNegativeButton("취소", null).setPositiveButton("연결 끊기", (dialog, which) -> {
+                    AuthSession session = authRepository.getCurrentValidSession();
+                    if (session == null) return;
+                    String vehicle = userCacheManager.getRegisteredVehicleUuid(session.getUserId());
+                    if (vehicle == null) return;
+                    disconnect.setEnabled(false);
+                    Thread request = new Thread(() -> {
+                        boolean success = FuelogBackendApiClient.getInstance(authRepository).disconnectVehicle(vehicle, disconnectOperation);
+                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                            if (binding == null) return;
+                            disconnect.setEnabled(true);
+                            Snackbar.make(binding.getRoot(), success ? "서버 연결 해제 완료" : "연결 해제 실패 · 다시 시도해 주세요", Snackbar.LENGTH_LONG).show();
+                        });
+                    });
+                    request.start();
+                }).show());
         setupListeners();
         renderAll();
         syncLatestVehicleFromServerDb();
@@ -236,10 +259,22 @@ public class ManageSettingsFragment extends Fragment {
                     if (!newAlias.isEmpty()) {
                         AuthSession s = authRepository.getCurrentValidSession();
                         if (s != null) {
-                            userCacheManager.setRegisteredVehicleForUser(s.getUserId(), newAlias);
-                            coordinator.setVehicleAlias(newAlias);
-                            renderAll();
-                            Snackbar.make(binding.getRoot(), "차량 별칭이 '" + newAlias + "'(으)로 변경되었습니다.", Snackbar.LENGTH_SHORT).show();
+                            String vehicle = userCacheManager.getRegisteredVehicleUuid(s.getUserId());
+                            if (vehicle == null || newAlias.length() > 100) return;
+                            new Thread(() -> {
+                                boolean success = FuelogBackendApiClient.getInstance(authRepository).renameVehicle(vehicle, newAlias);
+                                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                    if (binding == null) return;
+                                    AuthSession current = authRepository.getCurrentValidSession();
+                                    if (current == null || !current.getUserId().equals(s.getUserId())) return;
+                                    if (success) {
+                                        userCacheManager.setRegisteredVehicleForUser(s.getUserId(), newAlias);
+                                        coordinator.setVehicleAlias(newAlias);
+                                        renderAll();
+                                    }
+                                    Snackbar.make(binding.getRoot(), success ? "차량 이름을 서버에 저장했습니다." : "서버 저장 실패 · 오너 권한과 연결 상태를 확인해 주세요.", Snackbar.LENGTH_LONG).show();
+                                });
+                            }).start();
                         }
                     }
                 })

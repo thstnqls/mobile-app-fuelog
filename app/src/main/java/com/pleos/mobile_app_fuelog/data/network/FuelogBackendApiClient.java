@@ -3434,6 +3434,61 @@ public final class FuelogBackendApiClient {
     /**
      * 기기 연동 해제·권한 철회·로그아웃 시 활성 C03 동의(POST /trip-user/revoke) 및 C02 세션(DELETE /trip-user/session) 폐기
      */
+    @Nullable
+    public Boolean vehicleConnectionState(String vehicleId) { return vehicleConnectionState(vehicleId, null); }
+
+    @Nullable
+    public Boolean vehicleConnectionState(String vehicleId, @Nullable UserCacheManager cache) {
+        AuthSession session = authRepository.getCurrentValidSession();
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) return null;
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + UUID.fromString(vehicleId) + "/connection", "GET", token);
+            if (conn.getResponseCode() != 200) return null;
+            String body = readBody(conn, false);
+            JSONObject state = new JSONObject(body);
+            AuthSession current = authRepository.getCurrentValidSession();
+            if (cache != null && session != null && current != null && session.getUserId().equals(current.getUserId())
+                    && vehicleId.equals(cache.getRegisteredVehicleUuid(session.getUserId()))) {
+                String name = state.optString("vehicleName", "");
+                if (!name.isBlank()) cache.setRegisteredVehicleForUser(session.getUserId(), name);
+            }
+            return state.getBoolean("paired");
+        } catch (Exception failure) { return null; }
+        finally { if (conn != null) conn.disconnect(); }
+    }
+
+    public boolean renameVehicle(String vehicleId, String name) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || name.isBlank() || name.trim().length() > 100) return false;
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + UUID.fromString(vehicleId) + "/name", "PUT", token);
+            conn.setDoOutput(true);
+            try (var output = conn.getOutputStream()) {
+                output.write(new JSONObject().put("vehicle_name", name.trim()).toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            return conn.getResponseCode() == 200;
+        } catch (Exception failure) { return false; }
+        finally { if (conn != null) conn.disconnect(); }
+    }
+
+    public boolean disconnectVehicle(String vehicleId, String operationId) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) return false;
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + UUID.fromString(vehicleId) + "/connection/disconnect", "POST", token);
+            conn.setDoOutput(true);
+            byte[] body = new JSONObject().put("kind", "USER").put("operationId", operationId).toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            try (var output = conn.getOutputStream()) { output.write(body); }
+            if (conn.getResponseCode() == 200) return true;
+            return Boolean.FALSE.equals(vehicleConnectionState(vehicleId));
+        } catch (Exception failure) { return false; }
+        finally { if (conn != null) conn.disconnect(); }
+    }
+
     public void revokeActiveSessionAndConsent(@NonNull UserCacheManager cacheManager) {
         String userId = cacheManager.getLastAuthenticatedUserId();
         String consentId = cacheManager.getActiveConsentId();
