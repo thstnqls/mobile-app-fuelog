@@ -440,7 +440,6 @@ public class M03VehicleHomeFragment extends Fragment {
         renderSyncStatusHeader();
 
         // 차량 전환 시 이전 차량 데이터가 남아 섞이지 않도록 모든 컨테이너 초기화
-        binding.containerConfirmedExpenses.removeAllViews();
         binding.containerPendingTasks.removeAllViews();
         binding.containerMaintenanceSchedule.removeAllViews();
 
@@ -630,42 +629,10 @@ public class M03VehicleHomeFragment extends Fragment {
         binding.tvM03ConfirmedBreakdown.setText(
                 "주유 " + formatWon(summary.getConfirmedFuelWon())
                         + " · 정비 " + formatWon(summary.getConfirmedMaintenanceWon())
-                        + " (" + summary.getConfirmedCount() + "건 확정)"
         );
 
         long manWon = Math.round(summary.getConfirmedTotalWon() / 10000.0);
         binding.tvM03ChartCurrentLabel.setText(manWon + "만");
-
-        String calloutText = "미확인 추정 " + summary.getUnconfirmedCount() + "건("
-                + formatWon(summary.getUnconfirmedEstimatedWon()) + ") 별도 집계\n"
-                + "운행 소비 비용(" + formatWon(summary.getExcludedTripConsumptionWon()) + ")은 중복 합산하지 않아요";
-        binding.tvM03UnconfirmedAndExclusionNote.setText(calloutText);
-
-        List<ExpenseRecord> confirmedList = homeRepository.getConfirmedExpensesForSelectedVehicle();
-        for (ExpenseRecord record : confirmedList) {
-            String tag = record.getOwnership() == ExpenseRecord.Ownership.EXPLICITLY_SHARED
-                    ? "공동"
-                    : "개인";
-            LinearLayout row = new LinearLayout(requireContext());
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setPadding(0, dpToPx(6), 0, dpToPx(6));
-
-            TextView left = new TextView(requireContext());
-            left.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            left.setText(record.getDateLabel() + " · [" + tag + "] " + record.getTitle());
-            left.setTextSize(12.5f);
-            left.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_secondary));
-
-            TextView right = new TextView(requireContext());
-            right.setText(formatWon(record.getAmountWon()));
-            right.setTextSize(12.5f);
-            right.setTypeface(null, Typeface.BOLD);
-            right.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_primary));
-
-            row.addView(left);
-            row.addView(right);
-            binding.containerConfirmedExpenses.addView(row);
-        }
     }
 
     /**

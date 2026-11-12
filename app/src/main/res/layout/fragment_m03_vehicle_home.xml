@@ -439,41 +439,12 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- FR-M03-3: 다크 콜아웃 박스 (미확인 추정 건 별도 & 운행 소비 비용 제외 안내) -->
-                    <com.google.android.material.card.MaterialCardView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="14dp"
-                        app:cardBackgroundColor="@color/fuelog_dark_badge"
-                        app:cardCornerRadius="12dp"
-                        app:cardElevation="0dp">
-
-                        <TextView
-                            android:id="@+id/tv_m03_unconfirmed_and_exclusion_note"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center"
-                            android:lineSpacingExtra="3dp"
-                            android:paddingHorizontal="14dp"
-                            android:paddingVertical="10dp"
-                            android:textColor="@color/white"
-                            android:textSize="12sp" />
-                    </com.google.android.material.card.MaterialCardView>
-
-                    <!-- 확인된 지출 내역 리스트 -->
-                    <LinearLayout
-                        android:id="@+id/container_confirmed_expenses"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:orientation="vertical" />
-
                     <!-- 초록색 지출 기록 버튼 -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_m03_add_expense"
                         android:layout_width="match_parent"
                         android:layout_height="50dp"
-                        android:layout_marginTop="14dp"
+                        android:layout_marginTop="20dp"
                         android:text="지출 기록"
                         android:textSize="15sp"
                         android:textStyle="bold"
