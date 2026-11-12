@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/dialog_complete_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="정비 완료 확인"
+        android:textColor="@color/fuelog_text_primary"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/dialog_complete_desc"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="정비 완료 시 기존 주기가 완료 처리되고 동일 주기의 다음 예정이 자동으로 시작됩니다."
+        android:textColor="@color/fuelog_text_secondary"
+        android:textSize="12sp" />
+
+    <!-- 정비 항목 표시 -->
+    <TextView
+        android:id="@+id/tv_complete_item_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@color/fuelog_surface_subtle"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp"
+        android:text="대상: 엔진오일 &amp; 오일필터"
+        android:textColor="@color/fuelog_primary_dark"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <!-- 정비 일자 -->
+    <com.google.android.material.textfield.TextInputLayout
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:hint="정비 일자">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_complete_service_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="date" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- 정비 당시 주행거리 (km) -->
+    <com.google.android.material.textfield.TextInputLayout
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:hint="정비 당시 주행거리"
+        app:suffixText="km">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_complete_odometer_km"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- 결제 금액 (선택) -->
+    <com.google.android.material.textfield.TextInputLayout
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:hint="정비 비용 (선택, 차계부 연동)"
+        app:suffixText="원">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_complete_cost"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- 정비소 / 메모 (선택) -->
+    <com.google.android.material.textfield.TextInputLayout
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:hint="정비소 / 메모 (선택)">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_complete_shop_memo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+</LinearLayout>

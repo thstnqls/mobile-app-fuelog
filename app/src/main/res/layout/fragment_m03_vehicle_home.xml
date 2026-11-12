@@ -536,9 +536,13 @@
 
             <!-- 3. 소모품 관리 / 정비 예정 (참고 이미지 우측 폰 스타일) -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_m03_maintenance"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
                 app:cardBackgroundColor="@color/white"
                 app:cardCornerRadius="20dp"
                 app:cardElevation="1dp">

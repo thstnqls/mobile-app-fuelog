@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -2160,10 +2161,19 @@ public final class FuelogBackendApiClient {
         @Nullable public final Double intervalKm;
         @Nullable public final Integer intervalMonths;
         public final long revision;
+        @Nullable public final String lastServiceDate;
+        @Nullable public final Double lastServiceKm;
+        @Nullable public final String nextDueDate;
+        @Nullable public final Double nextDueKm;
+        @Nullable public final String status;
+        @Nullable public final String riskLevel;
 
         public MaintenancePlanItem(
                 String id, String name, boolean shared, boolean active,
-                @Nullable Double intervalKm, @Nullable Integer intervalMonths, long revision
+                @Nullable Double intervalKm, @Nullable Integer intervalMonths, long revision,
+                @Nullable String lastServiceDate, @Nullable Double lastServiceKm,
+                @Nullable String nextDueDate, @Nullable Double nextDueKm,
+                @Nullable String status, @Nullable String riskLevel
         ) {
             this.id = id;
             this.name = name;
@@ -2172,6 +2182,114 @@ public final class FuelogBackendApiClient {
             this.intervalKm = intervalKm;
             this.intervalMonths = intervalMonths;
             this.revision = revision;
+            this.lastServiceDate = lastServiceDate;
+            this.lastServiceKm = lastServiceKm;
+            this.nextDueDate = nextDueDate;
+            this.nextDueKm = nextDueKm;
+            this.status = status;
+            this.riskLevel = riskLevel;
+        }
+
+        public MaintenancePlanItem(
+                String id, String name, boolean shared, boolean active,
+                @Nullable Double intervalKm, @Nullable Integer intervalMonths, long revision
+        ) {
+            this(id, name, shared, active, intervalKm, intervalMonths, revision, null, null, null, null, null, null);
+        }
+
+        /**
+         * 다음 예정일 기준 D-Day 텍스트 계산 (예: "D-30", "D-DAY", "D+5")
+         */
+        @NonNull
+        public String getDDayText() {
+            if (nextDueDate == null || nextDueDate.trim().isEmpty()) {
+                return "-";
+            }
+            try {
+                java.time.LocalDate today = java.time.LocalDate.now();
+                java.time.LocalDate target = java.time.LocalDate.parse(nextDueDate.trim());
+                long days = java.time.temporal.ChronoUnit.DAYS.between(today, target);
+                if (days == 0) {
+                    return "D-DAY";
+                } else if (days > 0) {
+                    return "D-" + days;
+                } else {
+                    return "D+" + Math.abs(days) + " (기한초과)";
+                }
+            } catch (Exception e) {
+                return nextDueDate;
+            }
+        }
+
+        /**
+         * 남은 거리 텍스트 계산
+         */
+        @NonNull
+        public String getRemainingDistanceText(@Nullable Double currentOdometerKm) {
+            if (nextDueKm == null) {
+                return "-";
+            }
+            if (currentOdometerKm == null || currentOdometerKm <= 0.0) {
+                return String.format(Locale.KOREA, "%,d km 예정", Math.round(nextDueKm));
+            }
+            double diff = nextDueKm - currentOdometerKm;
+            if (diff >= 0) {
+                return String.format(Locale.KOREA, "%,d km 남음", Math.round(diff));
+            } else {
+                return String.format(Locale.KOREA, "%,d km 초과", Math.round(Math.abs(diff)));
+            }
+        }
+
+        /**
+         * 설정 주기 포맷팅 (예: "10,000 km / 12개월마다")
+         */
+        @NonNull
+        public String getIntervalText() {
+            if (intervalKm != null && intervalMonths != null) {
+                return String.format(Locale.KOREA, "%,d km / %d개월 주기", Math.round(intervalKm), intervalMonths);
+            } else if (intervalKm != null) {
+                return String.format(Locale.KOREA, "%,d km 주기", Math.round(intervalKm));
+            } else if (intervalMonths != null) {
+                return intervalMonths + "개월 주기";
+            } else {
+                return "주기 미설정";
+            }
+        }
+
+        /**
+         * 위험도 한글 라벨
+         */
+        @NonNull
+        public String getRiskLabel() {
+            if ("DANGER".equalsIgnoreCase(riskLevel)) {
+                return "교체 시급";
+            } else if ("OVERDUE".equalsIgnoreCase(riskLevel)) {
+                return "교체 권장";
+            } else if ("NORMAL".equalsIgnoreCase(riskLevel)) {
+                return "정상";
+            } else {
+                return "점검 필요";
+            }
+        }
+
+        /**
+         * 게이지 진행률 (0 ~ 100 %)
+         */
+        public int getProgressPercent(@Nullable Double currentOdometerKm) {
+            if ("DANGER".equalsIgnoreCase(riskLevel)) {
+                return 100;
+            } else if ("OVERDUE".equalsIgnoreCase(riskLevel)) {
+                return 95;
+            }
+            if (intervalKm != null && intervalKm > 0 && nextDueKm != null && currentOdometerKm != null) {
+                double remaining = nextDueKm - currentOdometerKm;
+                if (remaining <= 0) return 100;
+                double used = intervalKm - remaining;
+                if (used <= 0) return 10;
+                int percent = (int) Math.round((used / intervalKm) * 100.0);
+                return Math.max(5, Math.min(100, percent));
+            }
+            return 50;
         }
     }
 
@@ -2261,7 +2379,16 @@ public final class FuelogBackendApiClient {
                         Double intervalKm = obj.isNull("intervalKm") ? null : obj.optDouble("intervalKm");
                         Integer intervalMonths = obj.isNull("intervalMonths") ? null : obj.optInt("intervalMonths");
                         long rev = obj.optLong("revision", 1L);
-                        list.add(new MaintenancePlanItem(id, name, shared, active, intervalKm, intervalMonths, rev));
+                        String lastServiceDate = obj.isNull("lastServiceDate") ? null : obj.optString("lastServiceDate", null);
+                        Double lastServiceKm = obj.isNull("lastServiceKm") ? null : obj.optDouble("lastServiceKm");
+                        String nextDueDate = obj.isNull("nextDueDate") ? null : obj.optString("nextDueDate", null);
+                        Double nextDueKm = obj.isNull("nextDueKm") ? null : obj.optDouble("nextDueKm");
+                        String statusStr = obj.isNull("status") ? null : obj.optString("status", null);
+                        String riskLevel = obj.isNull("riskLevel") ? null : obj.optString("riskLevel", null);
+                        list.add(new MaintenancePlanItem(
+                                id, name, shared, active, intervalKm, intervalMonths, rev,
+                                lastServiceDate, lastServiceKm, nextDueDate, nextDueKm, statusStr, riskLevel
+                        ));
                     }
                 }
                 return list;
@@ -2272,6 +2399,122 @@ public final class FuelogBackendApiClient {
             if (conn != null) conn.disconnect();
         }
         return Collections.emptyList();
+    }
+
+    /**
+     * PUT /mobile/vehicles/{vehicleId}/maintenance-plans/{itemId} — 정비 주기 설정 / 수정
+     */
+    public boolean putMaintenancePlan(
+            @NonNull String vehicleId,
+            @NonNull String itemId,
+            long revision,
+            @NonNull String name,
+            @Nullable Double intervalKm,
+            @Nullable Integer intervalMonths
+    ) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return false;
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + vehicleId + "/maintenance-plans/" + itemId, "PUT", token);
+            if (revision > 0) {
+                conn.setRequestProperty("If-Match", "\"" + revision + "\"");
+            }
+            conn.setDoOutput(true);
+            JSONObject payload = new JSONObject();
+            payload.put("name", name);
+            payload.put("shared", true);
+            payload.put("basis", "USER");
+            if (intervalKm != null && intervalKm > 0) {
+                payload.put("intervalKm", intervalKm);
+            }
+            if (intervalMonths != null && intervalMonths > 0) {
+                payload.put("intervalMonths", intervalMonths);
+            }
+            writeBody(conn, payload.toString());
+            int status = conn.getResponseCode();
+            String respBody = readBody(conn, status >= 400);
+            SafeLogger.i("PUT maintenance-plans status=" + status + ", body=" + respBody);
+            return status >= 200 && status < 300;
+        } catch (Exception e) {
+            SafeLogger.w("PUT maintenance-plans 예외: " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
+     * POST /mobile/vehicles/{vehicleId}/maintenance-plans/{itemId}/complete — 사용자 정비 완료 확인 및 다음 회차 생성
+     */
+    public boolean completeMaintenancePlan(
+            @NonNull String vehicleId,
+            @NonNull String itemId,
+            long revision,
+            @NonNull String serviceDate,
+            @Nullable Double odometerKm
+    ) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return false;
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + vehicleId + "/maintenance-plans/" + itemId + "/complete", "POST", token);
+            if (revision > 0) {
+                conn.setRequestProperty("If-Match", "\"" + revision + "\"");
+            }
+            conn.setRequestProperty("Idempotency-Key", UUID.randomUUID().toString());
+            conn.setDoOutput(true);
+            JSONObject payload = new JSONObject();
+            payload.put("confirmed", true);
+            payload.put("serviceDate", serviceDate);
+            if (odometerKm != null && odometerKm >= 0.0) {
+                payload.put("odometerKm", odometerKm);
+            }
+            writeBody(conn, payload.toString());
+            int status = conn.getResponseCode();
+            String respBody = readBody(conn, status >= 400);
+            SafeLogger.i("POST complete maintenance-plans status=" + status + ", body=" + respBody);
+            return status >= 200 && status < 300;
+        } catch (Exception e) {
+            SafeLogger.w("POST complete maintenance-plans 예외: " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
+     * DELETE /mobile/vehicles/{vehicleId}/maintenance-plans/{itemId} — 정비 주기 비활성화
+     */
+    public boolean deleteMaintenancePlan(
+            @NonNull String vehicleId,
+            @NonNull String itemId,
+            long revision
+    ) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return false;
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + vehicleId + "/maintenance-plans/" + itemId, "DELETE", token);
+            if (revision > 0) {
+                conn.setRequestProperty("If-Match", "\"" + revision + "\"");
+            }
+            int status = conn.getResponseCode();
+            String respBody = readBody(conn, status >= 400);
+            SafeLogger.i("DELETE maintenance-plans status=" + status + ", body=" + respBody);
+            return status >= 200 && status < 300;
+        } catch (Exception e) {
+            SafeLogger.w("DELETE maintenance-plans 예외: " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
     }
 
     /**

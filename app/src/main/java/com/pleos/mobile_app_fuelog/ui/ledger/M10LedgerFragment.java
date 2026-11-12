@@ -172,6 +172,11 @@ public class M10LedgerFragment extends Fragment {
             args.putString(M07FuelConfirmFragment.ARG_CANDIDATE_ID, "cand-auto-detected-01");
             NavHostFragment.findNavController(this).navigate(R.id.nav_m07_fuel_confirm, args);
         });
+
+        // 정비 주기 관리 화면으로 이동
+        binding.btnLedgerGotoMaint.setOnClickListener(v -> {
+            NavHostFragment.findNavController(this).navigate(R.id.nav_m12_maintenance_schedules);
+        });
     }
 
     private void showMaintenanceRegisterDialog() {

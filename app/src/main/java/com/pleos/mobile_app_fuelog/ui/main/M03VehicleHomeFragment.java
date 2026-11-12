@@ -161,6 +161,16 @@ public class M03VehicleHomeFragment extends Fragment {
             if (page.success && !page.items.isEmpty()) {
                 homeRepository.applyBackendInboxItems(page.items);
             }
+
+            // 3) 백엔드 M12 정비 예정 계획(GET /mobile/vehicles/{vehicleId}/maintenance-plans) 실제 DB 데이터 조회
+            VehicleProfile selectedVeh = homeRepository.getSelectedVehicle();
+            if (selectedVeh != null) {
+                List<FuelogBackendApiClient.MaintenancePlanItem> plans =
+                        apiClient.fetchMaintenancePlans(selectedVeh.getVehicleId());
+                if (!plans.isEmpty()) {
+                    homeRepository.applyBackendMaintenancePlans(selectedVeh.getVehicleId(), plans);
+                }
+            }
             if (isAdded() && binding != null) {
                 requireActivity().runOnUiThread(this::renderDashboard);
             }
@@ -333,6 +343,10 @@ public class M03VehicleHomeFragment extends Fragment {
 
         binding.btnM03AddExpense.setOnClickListener(v ->
                 NavHostFragment.findNavController(this).navigate(R.id.nav_m07_fuel_confirm)
+        );
+
+        binding.cardM03Maintenance.setOnClickListener(v ->
+                NavHostFragment.findNavController(this).navigate(R.id.nav_m12_maintenance_schedules)
         );
     }
 

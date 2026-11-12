@@ -455,6 +455,46 @@ public final class M03HomeRepository {
         }
     }
 
+    /**
+     * 백엔드 GET /mobile/vehicles/{vehicleId}/maintenance-plans 응답을 소모품 정비 예정 목록에 반영한다.
+     */
+    public synchronized void applyBackendMaintenancePlans(
+            @NonNull String vehicleId,
+            @NonNull List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenancePlanItem> plans
+    ) {
+        if (plans.isEmpty()) {
+            return;
+        }
+
+        for (int i = allMaintenanceItems.size() - 1; i >= 0; i--) {
+            MaintenanceScheduleItem item = allMaintenanceItems.get(i);
+            if (vehicleId.equals(item.getVehicleId())) {
+                allMaintenanceItems.remove(i);
+            }
+        }
+
+        double currentOdo = getOdometerForVehicle(vehicleId);
+        for (com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenancePlanItem plan : plans) {
+            if (!plan.active) {
+                continue;
+            }
+            String dueDetail = plan.getIntervalText();
+            if (plan.nextDueDate != null) {
+                dueDetail += " · " + plan.nextDueDate;
+            }
+            String remainingBadge = plan.getRemainingDistanceText(currentOdo);
+            boolean urgent = "DANGER".equalsIgnoreCase(plan.riskLevel) || "OVERDUE".equalsIgnoreCase(plan.riskLevel);
+            allMaintenanceItems.add(new MaintenanceScheduleItem(
+                    plan.id,
+                    vehicleId,
+                    plan.name,
+                    dueDetail,
+                    remainingBadge,
+                    urgent
+            ));
+        }
+    }
+
     @NonNull
     public synchronized String getLastSyncedTimestamp() {
         return lastSyncedTimestamp;

@@ -52,4 +52,10 @@
         android:name="com.pleos.mobile_app_fuelog.ui.ledger.M07FuelConfirmFragment"
         android:label="M07. 주유 확인 및 등록"
         tools:layout="@layout/fragment_m07_fuel_confirm" />
+
+    <fragment
+        android:id="@+id/nav_m12_maintenance_schedules"
+        android:name="com.pleos.mobile_app_fuelog.ui.maintenance.M12MaintenanceScheduleFragment"
+        android:label="M12. 정비 예정 및 주기 설정"
+        tools:layout="@layout/fragment_m12_maintenance_schedule" />
 </navigation>
