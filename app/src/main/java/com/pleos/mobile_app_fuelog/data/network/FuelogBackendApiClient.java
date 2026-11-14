@@ -2132,11 +2132,13 @@ public final class FuelogBackendApiClient {
         @Nullable public final String memo;
         @Nullable public final String shop;
         @Nullable public final String receiptUrl;
+        public final long revision;
 
         public MaintenanceEventItem(
                 String id, String itemId, String serviceDate, Double odometerKm,
                 String status, boolean shared, boolean detailsShared,
-                long cost, String currency, @Nullable String memo, @Nullable String shop, @Nullable String receiptUrl
+                long cost, String currency, @Nullable String memo, @Nullable String shop, @Nullable String receiptUrl,
+                long revision
         ) {
             this.id = id;
             this.itemId = itemId;
@@ -2150,6 +2152,15 @@ public final class FuelogBackendApiClient {
             this.memo = memo;
             this.shop = shop;
             this.receiptUrl = receiptUrl;
+            this.revision = revision;
+        }
+
+        public MaintenanceEventItem(
+                String id, String itemId, String serviceDate, Double odometerKm,
+                String status, boolean shared, boolean detailsShared,
+                long cost, String currency, @Nullable String memo, @Nullable String shop, @Nullable String receiptUrl
+        ) {
+            this(id, itemId, serviceDate, odometerKm, status, shared, detailsShared, cost, currency, memo, shop, receiptUrl, 1L);
         }
     }
 
@@ -2334,9 +2345,10 @@ public final class FuelogBackendApiClient {
                             shop = details.isNull("shop") ? null : details.optString("shop");
                             receiptUrl = details.isNull("receiptUrl") ? null : details.optString("receiptUrl");
                         }
+                        long revision = obj.optLong("revision", 1L);
                         list.add(new MaintenanceEventItem(
                                 id, itemId, serviceDate, odo, eventStatus, shared, detailsShared,
-                                cost, currency, memo, shop, receiptUrl
+                                cost, currency, memo, shop, receiptUrl, revision
                         ));
                     }
                 }
@@ -2437,6 +2449,16 @@ public final class FuelogBackendApiClient {
             int status = conn.getResponseCode();
             String respBody = readBody(conn, status >= 400);
             SafeLogger.i("PUT maintenance-plans status=" + status + ", body=" + respBody);
+
+            if (status == 412) {
+                // If-Match revision mismatch: 백엔드의 최신 revision을 조회하여 1회 재시도
+                List<MaintenancePlanItem> freshPlans = fetchMaintenancePlans(vehicleId);
+                for (MaintenancePlanItem p : freshPlans) {
+                    if (itemId.equals(p.id) && p.revision != revision) {
+                        return putMaintenancePlan(vehicleId, itemId, p.revision, name, intervalKm, intervalMonths);
+                    }
+                }
+            }
             return status >= 200 && status < 300;
         } catch (Exception e) {
             SafeLogger.w("PUT maintenance-plans 예외: " + e.getMessage());
@@ -2524,7 +2546,7 @@ public final class FuelogBackendApiClient {
     public String ensureMaintenancePlanId(@NonNull String vehicleId, @NonNull String itemName) {
         List<MaintenancePlanItem> plans = fetchMaintenancePlans(vehicleId);
         for (MaintenancePlanItem p : plans) {
-            if (p.name.equalsIgnoreCase(itemName)) {
+            if (p.name.equalsIgnoreCase(itemName) && p.active) {
                 return p.id;
             }
         }
@@ -2568,6 +2590,20 @@ public final class FuelogBackendApiClient {
             @Nullable String shop,
             @Nullable String memo
     ) {
+        return createMaintenanceEvent(vehicleId, itemName, serviceDate, odometerKm, costWon, shop, memo, true, true);
+    }
+
+    public boolean createMaintenanceEvent(
+            @NonNull String vehicleId,
+            @NonNull String itemName,
+            @NonNull String serviceDate,
+            @Nullable Double odometerKm,
+            long costWon,
+            @Nullable String shop,
+            @Nullable String memo,
+            boolean shared,
+            boolean detailsShared
+    ) {
         String token = authRepository.getValidAccessToken();
         if (token == null || token.startsWith("local_jwt_")) {
             return false;
@@ -2585,8 +2621,8 @@ public final class FuelogBackendApiClient {
                 payload.put("odometerKm", odometerKm);
             }
             payload.put("status", "CONFIRMED");
-            payload.put("shared", true);
-            payload.put("detailsShared", true);
+            payload.put("shared", shared);
+            payload.put("detailsShared", detailsShared);
             payload.put("cost", (double) costWon);
             payload.put("currency", "KRW");
             if (shop != null && !shop.trim().isEmpty()) {
@@ -2602,6 +2638,86 @@ public final class FuelogBackendApiClient {
             return status >= 200 && status < 300;
         } catch (Exception e) {
             SafeLogger.w("POST maintenance-events 예외: " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
+     * PATCH /mobile/vehicles/{vehicleId}/maintenance-events/{eventId} — 정비 기록 수정 (M11)
+     */
+    public boolean patchMaintenanceEvent(
+            @NonNull String vehicleId,
+            @NonNull String eventId,
+            long revision,
+            @NonNull String serviceDate,
+            @Nullable Double odometerKm,
+            long costWon,
+            @Nullable String shop,
+            @Nullable String memo,
+            boolean shared,
+            boolean detailsShared
+    ) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return false;
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + vehicleId + "/maintenance-events/" + eventId, "PATCH", token);
+            if (revision > 0) {
+                conn.setRequestProperty("If-Match", "\"" + revision + "\"");
+            }
+            conn.setDoOutput(true);
+            JSONObject patch = new JSONObject();
+            patch.put("serviceDate", serviceDate);
+            if (odometerKm != null && odometerKm >= 0.0) {
+                patch.put("odometerKm", odometerKm);
+            }
+            patch.put("cost", (double) costWon);
+            patch.put("currency", "KRW");
+            patch.put("shop", shop != null ? shop.trim() : "");
+            patch.put("memo", memo != null ? memo.trim() : "");
+            patch.put("shared", shared);
+            patch.put("detailsShared", detailsShared);
+            writeBody(conn, patch.toString());
+            int status = conn.getResponseCode();
+            String respBody = readBody(conn, status >= 400);
+            SafeLogger.i("PATCH maintenance-events status=" + status + ", body=" + respBody);
+            return status >= 200 && status < 300;
+        } catch (Exception e) {
+            SafeLogger.w("PATCH maintenance-events 예외: " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
+     * DELETE /mobile/vehicles/{vehicleId}/maintenance-events/{eventId} — 정비 기록 삭제 (M11)
+     */
+    public boolean deleteMaintenanceEvent(
+            @NonNull String vehicleId,
+            @NonNull String eventId,
+            long revision
+    ) {
+        String token = authRepository.getValidAccessToken();
+        if (token == null || token.startsWith("local_jwt_")) {
+            return false;
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = openMobileJwtConnection("/mobile/vehicles/" + vehicleId + "/maintenance-events/" + eventId, "DELETE", token);
+            if (revision > 0) {
+                conn.setRequestProperty("If-Match", "\"" + revision + "\"");
+            }
+            int status = conn.getResponseCode();
+            String respBody = readBody(conn, status >= 400);
+            SafeLogger.i("DELETE maintenance-events status=" + status + ", body=" + respBody);
+            return status >= 200 && status < 300;
+        } catch (Exception e) {
+            SafeLogger.w("DELETE maintenance-events 예외: " + e.getMessage());
             return false;
         } finally {
             if (conn != null) conn.disconnect();
@@ -3609,7 +3725,16 @@ public final class FuelogBackendApiClient {
         String normalizedPath = path.startsWith("/") ? path : ("/" + path);
         URL url = new URL(getBaseUrl() + normalizedPath);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod(method);
+        try {
+            conn.setRequestMethod(method);
+        } catch (java.net.ProtocolException e) {
+            if ("PATCH".equalsIgnoreCase(method)) {
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+            } else {
+                throw e;
+            }
+        }
         conn.setConnectTimeout(6000);
         conn.setReadTimeout(6000);
         conn.setRequestProperty("Authorization", "Bearer " + accessToken);
@@ -3630,7 +3755,16 @@ public final class FuelogBackendApiClient {
         String normalizedPath = path.startsWith("/") ? path : ("/" + path);
         URL url = new URL(getBaseUrl() + normalizedPath);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod(method);
+        try {
+            conn.setRequestMethod(method);
+        } catch (java.net.ProtocolException e) {
+            if ("PATCH".equalsIgnoreCase(method)) {
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+            } else {
+                throw e;
+            }
+        }
         conn.setConnectTimeout(6000);
         conn.setReadTimeout(6000);
         conn.setRequestProperty("X-Installation-Id", installationId);
@@ -3653,7 +3787,16 @@ public final class FuelogBackendApiClient {
         String normalizedPath = path.startsWith("/") ? path : ("/" + path);
         URL url = new URL(getBaseUrl() + normalizedPath);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod(method);
+        try {
+            conn.setRequestMethod(method);
+        } catch (java.net.ProtocolException e) {
+            if ("PATCH".equalsIgnoreCase(method)) {
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+            } else {
+                throw e;
+            }
+        }
         conn.setConnectTimeout(6000);
         conn.setReadTimeout(6000);
         conn.setRequestProperty("Authorization", "Bearer " + installationSecret);

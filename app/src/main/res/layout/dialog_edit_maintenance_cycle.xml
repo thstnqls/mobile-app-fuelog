@@ -26,7 +26,7 @@
     <!-- 소모품 항목명 -->
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/til_cycle_item_name"
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
@@ -43,7 +43,7 @@
     <!-- 주행거리 주기 (km) -->
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/til_cycle_interval_km"
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
@@ -61,7 +61,7 @@
     <!-- 기간 주기 (개월) -->
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/til_cycle_interval_months"
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"

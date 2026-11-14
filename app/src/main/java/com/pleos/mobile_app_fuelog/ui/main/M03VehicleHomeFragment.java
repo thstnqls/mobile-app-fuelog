@@ -94,7 +94,7 @@ public class M03VehicleHomeFragment extends Fragment {
 
         authRepository = AuthRepository.getInstance(requireContext());
         userCacheManager = UserCacheManager.getInstance(requireContext());
-        homeRepository = new M03HomeRepository();
+        homeRepository = M03HomeRepository.getInstance();
 
         AuthSession session = authRepository.getCurrentValidSession();
         if (session == null) {
@@ -138,6 +138,14 @@ public class M03VehicleHomeFragment extends Fragment {
             List<FuelogBackendApiClient.BackendVehicleItem> backendVehicles = apiClient.fetchMobileVehicles();
             if (!backendVehicles.isEmpty()) {
                 homeRepository.applyBackendUserVehicles(backendVehicles);
+                String currentSelected = homeRepository.getSelectedVehicle() != null
+                        ? homeRepository.getSelectedVehicle().getVehicleId() : null;
+                if (currentSelected == null || !homeRepository.hasVehicle(currentSelected)) {
+                    String preferredVid = userCacheManager.getRegisteredVehicleUuid(userId);
+                    if (preferredVid != null && homeRepository.hasVehicle(preferredVid)) {
+                        homeRepository.selectVehicle(preferredVid);
+                    }
+                }
             }
 
             // 1) 백엔드 차량 홈(GET /vehicle/home) 및 동기화 상태(GET /sync/status) 조회
@@ -181,6 +189,10 @@ public class M03VehicleHomeFragment extends Fragment {
         // 상단 차량 카드 영역 좌우 스와이프 제스처 설정
         setupVehicleSwipeGesture();
 
+        // 차량 변경 버튼 및 카드 영역 탭 시 차량 전환 팝업 열기
+        binding.btnM03ChangeVehicle.setOnClickListener(v -> showVehicleSwitcherDialog());
+        binding.cardM03VehicleSwipeArea.setOnClickListener(v -> showVehicleSwitcherDialog());
+
         // 동기화 배지 탭 시 온라인(백엔드 재동기화)/오프라인(마지막 갱신 시각) 전환
         binding.tvM03SyncStatus.setOnClickListener(v -> {
             boolean nextOffline = !homeRepository.isOfflineMode();
@@ -206,6 +218,12 @@ public class M03VehicleHomeFragment extends Fragment {
 
             @Override
             public boolean onDown(MotionEvent e) {
+                return true;
+            }
+
+            @Override
+            public boolean onSingleTapConfirmed(MotionEvent e) {
+                showVehicleSwitcherDialog();
                 return true;
             }
 
@@ -633,6 +651,33 @@ public class M03VehicleHomeFragment extends Fragment {
 
         long manWon = Math.round(summary.getConfirmedTotalWon() / 10000.0);
         binding.tvM03ChartCurrentLabel.setText(manWon + "만");
+
+        // 이번달 확정 차계부 지출 내역 목록 표시
+        binding.containerConfirmedExpenses.removeAllViews();
+        List<ExpenseRecord> confirmedList = homeRepository.getConfirmedExpensesForSelectedVehicle();
+        for (ExpenseRecord record : confirmedList) {
+            String tag = record.getOwnership() == ExpenseRecord.Ownership.EXPLICITLY_SHARED ? "공동" : "개인";
+            LinearLayout row = new LinearLayout(requireContext());
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, dpToPx(8), 0, dpToPx(8));
+
+            TextView left = new TextView(requireContext());
+            left.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            left.setText(record.getDateLabel() + " · [" + tag + "] " + record.getTitle());
+            left.setTextSize(13f);
+            left.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_secondary));
+
+            TextView right = new TextView(requireContext());
+            right.setText(formatWon(record.getAmountWon()));
+            right.setTextSize(13f);
+            right.setTypeface(null, Typeface.BOLD);
+            right.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_primary));
+
+            row.addView(left);
+            row.addView(right);
+            binding.containerConfirmedExpenses.addView(row);
+        }
     }
 
     /**

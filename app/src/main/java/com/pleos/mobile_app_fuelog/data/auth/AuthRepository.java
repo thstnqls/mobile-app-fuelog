@@ -870,7 +870,10 @@ public final class AuthRepository {
             } else if (status == 400 || status == 401) {
                 String errBody = readResponseBody(conn, true);
                 SafeLogger.w("Supabase refresh_token 무효화(status=" + status + "): " + errBody);
-                if (errBody.contains("invalid_grant") || errBody.contains("invalid_refresh_token")) {
+                if (errBody.contains("invalid_grant")
+                        || errBody.contains("invalid_refresh_token")
+                        || errBody.contains("refresh_token_already_used")
+                        || errBody.contains("Invalid Refresh Token")) {
                     clearStoredSessionTokensOnly();
                     userCacheManager.onSessionExpiredOrLoggedOut();
                 }

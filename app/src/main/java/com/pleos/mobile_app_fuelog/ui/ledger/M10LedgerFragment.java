@@ -35,6 +35,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
+import com.pleos.mobile_app_fuelog.ui.maintenance.M11MaintenanceEventFragment;
+
 /**
  * M10. 차계부 메인 화면.
  * - 월별 실제 지출 총액, 주유비, 정비비 요약 표시.
@@ -159,7 +161,12 @@ public class M10LedgerFragment extends Fragment {
                         if (which == 0) {
                             NavHostFragment.findNavController(this).navigate(R.id.nav_m07_fuel_confirm);
                         } else {
-                            showMaintenanceRegisterDialog();
+                            Bundle args = new Bundle();
+                            args.putString(M11MaintenanceEventFragment.ARG_MODE, M11MaintenanceEventFragment.MODE_CREATE);
+                            if (homeRepository.getSelectedVehicle() != null) {
+                                args.putString(M11MaintenanceEventFragment.ARG_VEHICLE_ID, homeRepository.getSelectedVehicle().getVehicleId());
+                            }
+                            NavHostFragment.findNavController(this).navigate(R.id.nav_m11_maintenance_event, args);
                         }
                     })
                     .setNegativeButton("취소", null)
@@ -294,9 +301,21 @@ public class M10LedgerFragment extends Fragment {
 
     private void setupRecyclerView() {
         adapter = new ExpenseListAdapter(record -> {
-            Snackbar.make(binding.getRoot(),
-                    record.getTitle() + " (" + NumberFormat.getNumberInstance(Locale.KOREA).format(record.getAmountWon()) + "원)",
-                    Snackbar.LENGTH_SHORT).show();
+            if (record.getCategory() == ExpenseRecord.Category.MAINTENANCE) {
+                Bundle args = new Bundle();
+                args.putString(M11MaintenanceEventFragment.ARG_MODE, M11MaintenanceEventFragment.MODE_DETAIL);
+                args.putString(M11MaintenanceEventFragment.ARG_VEHICLE_ID, record.getVehicleId());
+                args.putString(M11MaintenanceEventFragment.ARG_RECORD_ID, record.getRecordId());
+                if (record.getRecordId().startsWith("maint_db_")) {
+                    args.putString(M11MaintenanceEventFragment.ARG_EVENT_ID, record.getRecordId().substring("maint_db_".length()));
+                }
+                args.putString(M11MaintenanceEventFragment.ARG_ITEM_NAME, record.getTitle());
+                NavHostFragment.findNavController(this).navigate(R.id.nav_m11_maintenance_event, args);
+            } else {
+                Snackbar.make(binding.getRoot(),
+                        record.getTitle() + " (" + NumberFormat.getNumberInstance(Locale.KOREA).format(record.getAmountWon()) + "원)",
+                        Snackbar.LENGTH_SHORT).show();
+            }
         });
         binding.recyclerExpenses.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.recyclerExpenses.setAdapter(adapter);

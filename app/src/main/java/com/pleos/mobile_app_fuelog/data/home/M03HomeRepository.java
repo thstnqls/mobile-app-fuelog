@@ -153,6 +153,18 @@ public final class M03HomeRepository {
         newUserEmptyMode = false;
     }
 
+    public synchronized boolean hasVehicle(@Nullable String vehicleId) {
+        if (vehicleId == null || vehicleId.trim().isEmpty()) {
+            return false;
+        }
+        for (VehicleProfile v : vehicles) {
+            if (vehicleId.equals(v.getVehicleId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public synchronized void registerOrUpdateVehicle(@NonNull VehicleProfile profile) {
         for (int i = 0; i < vehicles.size(); i++) {
             if (vehicles.get(i).getVehicleId().equals(profile.getVehicleId())) {
@@ -199,6 +211,26 @@ public final class M03HomeRepository {
         allExpenses.add(record);
     }
 
+    @Nullable
+    public synchronized ExpenseRecord getExpenseRecordById(@NonNull String recordId) {
+        for (ExpenseRecord e : allExpenses) {
+            if (recordId.equals(e.getRecordId())) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    public synchronized boolean removeExpenseRecordById(@NonNull String recordId) {
+        for (int i = allExpenses.size() - 1; i >= 0; i--) {
+            if (recordId.equals(allExpenses.get(i).getRecordId())) {
+                allExpenses.remove(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public synchronized void addMaintenanceScheduleItem(@NonNull MaintenanceScheduleItem item) {
         for (int i = 0; i < allMaintenanceItems.size(); i++) {
             if (allMaintenanceItems.get(i).getScheduleId().equals(item.getScheduleId())) {
@@ -237,6 +269,15 @@ public final class M03HomeRepository {
         return distinctOdo;
     }
 
+    public synchronized void setOdometerForVehicle(@NonNull String vehicleId, double odometerKm) {
+        if (odometerKm > 0) {
+            vehicleOdometerMap.put(vehicleId, odometerKm);
+            if (vehicleId.equals(selectedVehicleId)) {
+                this.latestOdometerKm = odometerKm;
+            }
+        }
+    }
+
     public synchronized void updateSyncTimestampNow() {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA);
         this.lastSyncedTimestamp = sdf.format(new Date());
@@ -265,7 +306,9 @@ public final class M03HomeRepository {
                     alias,
                     true
             ));
-            selectedVehicleId = targetVid;
+            if (selectedVehicleId == null) {
+                selectedVehicleId = targetVid;
+            }
             newUserEmptyMode = false;
 
             if (homeResp.distanceKm != null && homeResp.distanceKm > 0) {
@@ -402,6 +445,8 @@ public final class M03HomeRepository {
         }
     }
 
+    private final Map<String, List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenanceEventItem>> vehicleMaintenanceEventsMap = new HashMap<>();
+
     /**
      * 백엔드 GET /mobile/vehicles/{vehicleId}/maintenance-events 응답(실제 DB 정비 이력)을 지출 목록에 반영한다.
      */
@@ -409,6 +454,7 @@ public final class M03HomeRepository {
             @NonNull String vehicleId,
             @NonNull List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenanceEventItem> events
     ) {
+        vehicleMaintenanceEventsMap.put(vehicleId, new ArrayList<>(events));
         if (events.isEmpty()) {
             return;
         }
@@ -453,6 +499,62 @@ public final class M03HomeRepository {
                 }
             }
         }
+    }
+
+    @Nullable
+    public synchronized com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenanceEventItem getMaintenanceEventById(
+            @NonNull String vehicleId,
+            @NonNull String eventId
+    ) {
+        List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenanceEventItem> list = vehicleMaintenanceEventsMap.get(vehicleId);
+        if (list != null) {
+            for (com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenanceEventItem it : list) {
+                if (eventId.equals(it.id)) {
+                    return it;
+                }
+            }
+        }
+        return null;
+    }
+
+    @NonNull
+    public synchronized List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenanceEventItem> getMaintenanceEventsForVehicle(
+            @NonNull String vehicleId
+    ) {
+        List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenanceEventItem> list = vehicleMaintenanceEventsMap.get(vehicleId);
+        return list != null ? new ArrayList<>(list) : Collections.emptyList();
+    }
+
+    public synchronized void removeMaintenanceEvent(@NonNull String vehicleId, @NonNull String eventId) {
+        List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenanceEventItem> list = vehicleMaintenanceEventsMap.get(vehicleId);
+        if (list != null) {
+            for (int i = list.size() - 1; i >= 0; i--) {
+                if (eventId.equals(list.get(i).id)) {
+                    list.remove(i);
+                }
+            }
+        }
+        for (int i = allExpenses.size() - 1; i >= 0; i--) {
+            ExpenseRecord e = allExpenses.get(i);
+            if (e.getRecordId().equals("maint_db_" + eventId)) {
+                allExpenses.remove(i);
+            }
+        }
+    }
+
+    @NonNull
+    public synchronized List<ExpenseRecord> getExpensesForVehicle(@NonNull String vehicleId) {
+        List<ExpenseRecord> result = new ArrayList<>();
+        for (ExpenseRecord record : allExpenses) {
+            if (!vehicleId.equals(record.getVehicleId())) {
+                continue;
+            }
+            if (record.getOwnership() == ExpenseRecord.Ownership.UNSHARED_OTHER) {
+                continue;
+            }
+            result.add(record);
+        }
+        return result;
     }
 
     /**

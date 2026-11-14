@@ -19,6 +19,7 @@ import com.pleos.mobile_app_fuelog.R;
 import com.pleos.mobile_app_fuelog.data.auth.AuthRepository;
 import com.pleos.mobile_app_fuelog.data.auth.AuthSession;
 import com.pleos.mobile_app_fuelog.data.cache.UserCacheManager;
+import com.pleos.mobile_app_fuelog.data.home.ExpenseRecord;
 import com.pleos.mobile_app_fuelog.data.home.M03HomeRepository;
 import com.pleos.mobile_app_fuelog.data.home.VehicleProfile;
 import com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient;
@@ -65,7 +66,7 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
 
         authRepository = AuthRepository.getInstance(requireContext());
         userCacheManager = UserCacheManager.getInstance(requireContext());
-        homeRepository = new M03HomeRepository();
+        homeRepository = M03HomeRepository.getInstance();
         apiClient = FuelogBackendApiClient.getInstance(authRepository);
 
         setupVehicleInfo();
@@ -76,21 +77,21 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
     }
 
     private void setupVehicleInfo() {
-        AuthSession session = authRepository.getCurrentValidSession();
-        if (session != null) {
-            String uid = session.getUserId();
-            activeVehicleId = userCacheManager.getRegisteredVehicleUuid(uid);
-            String vehicleName = userCacheManager.getVisibleCachedVehicleName();
+        VehicleProfile profile = homeRepository.getSelectedVehicle();
+        if (profile != null) {
+            activeVehicleId = profile.getVehicleId();
+        } else {
+            AuthSession session = authRepository.getCurrentValidSession();
+            if (session != null) {
+                String uid = session.getUserId();
+                activeVehicleId = userCacheManager.getRegisteredVehicleUuid(uid);
+            }
             if (activeVehicleId == null || activeVehicleId.trim().isEmpty()) {
                 activeVehicleId = M03HomeRepository.VEHICLE_ID_PRIMARY;
             }
-            homeRepository.clearAllAndInitVehicle(activeVehicleId, vehicleName);
-        } else {
-            activeVehicleId = M03HomeRepository.VEHICLE_ID_PRIMARY;
         }
 
         currentOdometerKm = homeRepository.getLatestOdometerKm();
-        VehicleProfile profile = homeRepository.getSelectedVehicle();
         String name = profile != null ? profile.getDisplayName() : "내 차량";
         if (currentOdometerKm > 0) {
             binding.tvM12VehicleSubtitle.setText(String.format(Locale.KOREA, "%s · 누적 %,d km", name, Math.round(currentOdometerKm)));
@@ -195,7 +196,7 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
      * 신규 소모품 주기 등록 다이얼로그
      */
     private void showAddPlanDialog() {
-        DialogEditMaintenanceCycleBinding dialogBinding = DialogEditMaintenanceCycleBinding.inflate(getLayoutInflater());
+        DialogEditMaintenanceCycleBinding dialogBinding = DialogEditMaintenanceCycleBinding.inflate(LayoutInflater.from(requireContext()));
         dialogBinding.dialogEditCycleTitle.setText("새 소모품 교체 주기 추가");
         dialogBinding.etCycleItemName.setText("");
         dialogBinding.etCycleItemName.setHint("예: 엔진오일, 와이퍼, 타이어 위치 교환");
@@ -238,7 +239,7 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
 
     @Override
     public void onEditCycle(@NonNull FuelogBackendApiClient.MaintenancePlanItem item) {
-        DialogEditMaintenanceCycleBinding dialogBinding = DialogEditMaintenanceCycleBinding.inflate(getLayoutInflater());
+        DialogEditMaintenanceCycleBinding dialogBinding = DialogEditMaintenanceCycleBinding.inflate(LayoutInflater.from(requireContext()));
         dialogBinding.dialogEditCycleTitle.setText(item.name + " 주기 설정");
         dialogBinding.etCycleItemName.setText(item.name);
         dialogBinding.etCycleIntervalKm.setText(item.intervalKm != null ? String.valueOf(Math.round(item.intervalKm)) : "");
@@ -293,7 +294,7 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
 
     @Override
     public void onCompleteMaintenance(@NonNull FuelogBackendApiClient.MaintenancePlanItem item) {
-        DialogCompleteMaintenanceBinding dialogBinding = DialogCompleteMaintenanceBinding.inflate(getLayoutInflater());
+        DialogCompleteMaintenanceBinding dialogBinding = DialogCompleteMaintenanceBinding.inflate(LayoutInflater.from(requireContext()));
         dialogBinding.tvCompleteItemName.setText("대상: " + item.name);
 
         // 기본 정비일자: 오늘
@@ -309,6 +310,13 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
         new MaterialAlertDialogBuilder(requireContext())
                 .setView(dialogBinding.getRoot())
                 .setNegativeButton("취소", null)
+                .setNeutralButton("상세 등록", (dialog, which) -> {
+                    Bundle args = new Bundle();
+                    args.putString(M11MaintenanceEventFragment.ARG_MODE, M11MaintenanceEventFragment.MODE_CREATE);
+                    args.putString(M11MaintenanceEventFragment.ARG_VEHICLE_ID, activeVehicleId);
+                    args.putString(M11MaintenanceEventFragment.ARG_ITEM_NAME, item.name);
+                    NavHostFragment.findNavController(this).navigate(R.id.nav_m11_maintenance_event, args);
+                })
                 .setPositiveButton("정비 완료 처리", (dialog, which) -> {
                     String serviceDate = dialogBinding.etCompleteServiceDate.getText() != null
                             ? dialogBinding.etCompleteServiceDate.getText().toString().trim() : todayStr;
@@ -351,7 +359,40 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
                     activeVehicleId, item.id, item.revision, serviceDate, odoKm
             );
 
-            // 정비 비용 또는 메모가 입력되었으면 지출/정비 기록 API도 함께 호출하여 차계부 연동
+            // 서버에서 실패한 경우 (기존 레거시 시드 데이터 등 500 오류 대비 자동 복구)
+            if (!completeSuccess) {
+                apiClient.deleteMaintenancePlan(activeVehicleId, item.id, item.revision);
+                String newPlanId = UUID.randomUUID().toString();
+                boolean putOk = apiClient.putMaintenancePlan(
+                        activeVehicleId, newPlanId, 0, item.name, item.intervalKm, item.intervalMonths
+                );
+                if (putOk) {
+                    completeSuccess = apiClient.completeMaintenancePlan(
+                            activeVehicleId, newPlanId, 1, serviceDate, odoKm
+                    );
+                }
+            }
+
+            // 차계부(M10) 지출 및 정비 기록 로컬 연동
+            homeRepository.addExpenseRecord(new ExpenseRecord(
+                    "maint_" + UUID.randomUUID().toString(),
+                    activeVehicleId,
+                    ExpenseRecord.Category.MAINTENANCE,
+                    ExpenseRecord.Ownership.MY_RECORD,
+                    ExpenseRecord.ConfirmationState.USER_CONFIRMED,
+                    item.name + " 교체",
+                    serviceDate,
+                    costWon
+            ));
+
+            if (odoKm != null && odoKm > 0) {
+                double currentOdo = homeRepository.getOdometerForVehicle(activeVehicleId);
+                if (odoKm > currentOdo) {
+                    homeRepository.setOdometerForVehicle(activeVehicleId, odoKm);
+                }
+            }
+
+            // 정비 비용 또는 메모가 입력되었으면 백엔드 정비 이력 API도 함께 호출하여 차계부 연동
             if (costWon > 0 || (shopMemo != null && !shopMemo.isEmpty())) {
                 apiClient.createMaintenanceEvent(
                         activeVehicleId, item.name, serviceDate, odoKm, costWon,
@@ -360,13 +401,14 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
             }
 
             if (isAdded() && getActivity() != null) {
+                final boolean finalSuccess = completeSuccess;
                 requireActivity().runOnUiThread(() -> {
-                    if (completeSuccess) {
+                    if (finalSuccess) {
                         Toast.makeText(requireContext(), "정비가 완료 처리되고 다음 주기가 시작되었습니다.", Toast.LENGTH_SHORT).show();
                         loadPlansFromBackend();
                     } else {
                         binding.progressM12Loading.setVisibility(View.GONE);
-                        Toast.makeText(requireContext(), "정비 완료 처리에 실패했습니다.", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(requireContext(), "정비 완료 처리에 실패했습니다. 다시 시도해주세요.", Toast.LENGTH_SHORT).show();
                     }
                 });
             }

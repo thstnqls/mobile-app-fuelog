@@ -188,7 +188,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_edit_cycle"
-                style="@style/Widget.Material3.Button.OutlinedButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="0dp"
                 android:layout_height="42dp"
                 android:layout_marginEnd="8dp"
