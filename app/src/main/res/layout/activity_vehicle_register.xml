@@ -44,7 +44,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:lineSpacingExtra="3dp"
-                android:text="차량 화면(C01)의 QR 코드를 아래 카메라에 비추면 6자리 비교 확인 코드가 발급됩니다."
+                android:text="차량 화면의 QR 코드를 아래 카메라에 비추면 6자리 비교 확인 코드가 발급됩니다."
                 android:textColor="@color/fuelog_text_secondary"
                 android:textSize="13sp" />
 
@@ -81,7 +81,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="차량 디스플레이(C01) 승인 코드 입력"
+                    android:text="차량 디스플레이 승인 코드 입력"
                     android:textColor="#5CE1A6"
                     android:textSize="14sp"
                     android:textStyle="bold" />
@@ -93,7 +93,7 @@
                     android:layout_marginTop="6dp"
                     android:gravity="center"
                     android:lineSpacingExtra="2dp"
-                    android:text="차량 디스플레이(C01) 화면에 표시된 6자리 승인 코드를 입력해 주세요."
+                    android:text="차량 디스플레이 화면에 표시된 6자리 승인 코드를 입력해 주세요."
                     android:textColor="#D0D7DE"
                     android:textSize="12.5sp" />
 

@@ -98,7 +98,7 @@ public final class PermissionGuideHelper {
         }
 
         AlertDialog dialog = new MaterialAlertDialogBuilder(context)
-                .setTitle("선택 기능 및 권한 안내 (FR-M01-2)")
+                .setTitle("선택 기능 및 권한 안내")
                 .setMessage(sb.toString().trim())
                 .setPositiveButton("확인", null)
                 .create();

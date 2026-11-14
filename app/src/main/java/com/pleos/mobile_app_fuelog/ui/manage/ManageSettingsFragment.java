@@ -210,7 +210,7 @@ public class ManageSettingsFragment extends Fragment {
         if (devices.isEmpty()) {
             new MaterialAlertDialogBuilder(requireContext())
                     .setTitle("연동 단말기")
-                    .setMessage("현재 QR 인식으로 연동된 차량 단말기가 없습니다.\n'차량 등록' 메뉴에서 차량 화면(C01)의 QR 코드를 스캔해 주세요.")
+                    .setMessage("현재 QR 인식으로 연동된 차량 단말기가 없습니다.\n'차량 등록' 메뉴에서 차량 화면의 QR 코드를 스캔해 주세요.")
                     .setPositiveButton("차량 등록하기", (d, w) -> {
                         Intent intent = new Intent(requireContext(), VehicleRegisterActivity.class);
                         registerVehicleLauncher.launch(intent);

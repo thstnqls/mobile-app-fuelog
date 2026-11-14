@@ -409,7 +409,7 @@ public class M03VehicleHomeFragment extends Fragment {
             textCol.addView(subView);
 
             TextView arrowView = new TextView(requireContext());
-            arrowView.setText(task.getDestination().getScreenCode() + " ›");
+            arrowView.setText("확인 ›");
             arrowView.setTextSize(13f);
             arrowView.setTypeface(null, Typeface.BOLD);
             arrowView.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_primary));
@@ -448,11 +448,11 @@ public class M03VehicleHomeFragment extends Fragment {
             return;
         }
         new MaterialAlertDialogBuilder(requireContext())
-                .setTitle(dest.getScreenCode() + " · " + dest.getBadgeLabel())
+                .setTitle(dest.getBadgeLabel())
                 .setMessage(task.getTitle() + "\n\n" + task.getSubtitle())
-                .setPositiveButton(dest.getScreenCode() + " 이동", (d, w) ->
+                .setPositiveButton("확인", (d, w) ->
                         Snackbar.make(binding.getRoot(),
-                                dest.getScreenCode() + "(" + dest.getBadgeLabel() + ") 화면으로 이동합니다.",
+                                dest.getBadgeLabel() + " 화면으로 이동합니다.",
                                 Snackbar.LENGTH_SHORT).show()
                 )
                 .setNegativeButton("닫기", null)

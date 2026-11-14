@@ -488,7 +488,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="FR-M01-1: 초기 버전은 이메일 로그인만 제공하며 소셜 로그인은 후속 확장됩니다."
+                        android:text="초기 버전은 이메일 로그인만 제공하며 소셜 로그인은 후속 확장됩니다."
                         android:textColor="@color/fuelog_text_secondary"
                         android:textSize="11sp" />
 
@@ -553,7 +553,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginEnd="6dp"
                         android:layout_weight="1"
-                        android:text="차량 있음 계정\n(car@ → M03)"
+                        android:text="차량 있음 계정\n(car@)"
                         android:textSize="11sp" />
 
                     <com.google.android.material.button.MaterialButton
@@ -563,7 +563,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="6dp"
                         android:layout_weight="1"
-                        android:text="차량 없음 계정\n(new@ → M02)"
+                        android:text="차량 없음 계정\n(new@)"
                         android:textSize="11sp" />
                 </LinearLayout>
 
@@ -572,7 +572,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:text="FR-M01-3: 서버 통신 오류(HTTP 503) 시뮬레이션"
+                    android:text="서버 통신 오류(HTTP 503) 시뮬레이션"
                     android:textSize="12sp" />
 
                 <com.google.android.material.button.MaterialButton

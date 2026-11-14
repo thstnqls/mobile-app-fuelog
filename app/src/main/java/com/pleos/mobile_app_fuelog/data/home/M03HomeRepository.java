@@ -453,7 +453,7 @@ public final class M03HomeRepository {
                     item.deliveredAt != null && item.deliveredAt.length() >= 16
                             ? item.deliveredAt.substring(0, 16).replace('T', ' ')
                             : "방금",
-                    "백엔드 C04 운행 요약 (" + shortId + ")",
+                    "운행 요약 (" + shortId + ")",
                     dist,
                     0,
                     badge,

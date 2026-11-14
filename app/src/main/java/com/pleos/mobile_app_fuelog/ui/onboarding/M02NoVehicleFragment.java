@@ -151,7 +151,7 @@ public class M02NoVehicleFragment extends Fragment {
         binding.barcodeScannerM02.getBarcodeView().setDecoderFactory(
                 new DefaultDecoderFactory(Collections.singletonList(BarcodeFormat.QR_CODE))
         );
-        binding.barcodeScannerM02.setStatusText("차량 디스플레이(C01)의 QR 코드를 사각형 안에 맞춰주세요");
+        binding.barcodeScannerM02.setStatusText("차량 디스플레이의 QR 코드를 사각형 안에 맞춰주세요");
         binding.barcodeScannerM02.decodeContinuous(result -> {
             if (binding == null || isProcessingQr || result.getText() == null || result.getText().trim().isEmpty()) {
                 return;
@@ -168,7 +168,7 @@ public class M02NoVehicleFragment extends Fragment {
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
                 == PackageManager.PERMISSION_GRANTED) {
             if (binding != null) {
-                binding.tvM02QrStatus.setText("상태: 내장 카메라 스캐너가 활성화되었습니다. 차량 화면(C01)의 QR 코드를 비춰주세요.");
+                binding.tvM02QrStatus.setText("상태: 내장 카메라 스캐너가 활성화되었습니다. 차량 화면의 QR 코드를 비춰주세요.");
                 binding.barcodeScannerM02.resume();
             }
         } else {
@@ -231,7 +231,7 @@ public class M02NoVehicleFragment extends Fragment {
                     startCodeCountdownTimer();
 
                     binding.tvM02ConfirmationCodeGuide.setText(
-                            "차량 디스플레이(C01) 화면에 표시된 6자리 승인 코드를 입력해 주세요.\n"
+                            "차량 디스플레이 화면에 표시된 6자리 승인 코드를 입력해 주세요.\n"
                                     + "(대상 차량: " + pendingVehicleAlias + ")"
                     );
                     binding.tvM02QrStatus.setText(
@@ -243,7 +243,7 @@ public class M02NoVehicleFragment extends Fragment {
                             == PackageManager.PERMISSION_GRANTED) {
                         binding.barcodeScannerM02.resume();
                     }
-                    binding.tvM02QrStatus.setText("상태: QR 코드 확인 코드 발급에 실패했습니다. 유효한 C01 QR 코드를 다시 스캔해 주세요.");
+                    binding.tvM02QrStatus.setText("상태: QR 코드 확인 코드 발급에 실패했습니다. 유효한 QR 코드를 다시 스캔해 주세요.");
                     Snackbar.make(binding.getRoot(),
                             "QR 코드 검증 실패: " + (codeResult.errorMessage != null ? codeResult.errorMessage : "유효한 QR이 아닙니다."),
                             Snackbar.LENGTH_LONG).show();
@@ -329,7 +329,7 @@ public class M02NoVehicleFragment extends Fragment {
                 codeFailureCount++;
                 binding.layoutM02CodeLoading.setVisibility(View.GONE);
 
-                String errorMsg = "승인 코드가 일치하지 않습니다. (" + codeFailureCount + "회 불일치)\n차량 디스플레이(C01)의 6자리 코드를 다시 확인해 주세요.";
+                String errorMsg = "승인 코드가 일치하지 않습니다. (" + codeFailureCount + "회 불일치)\n차량 디스플레이의 6자리 코드를 다시 확인해 주세요.";
                 binding.tvM02CodeError.setText(errorMsg);
                 binding.tvM02CodeError.setVisibility(View.VISIBLE);
                 binding.tvM02QrStatus.setText("상태: 승인 코드 불일치 (" + codeFailureCount + "회) — 다시 입력해 주세요.");
@@ -422,7 +422,7 @@ public class M02NoVehicleFragment extends Fragment {
                     M04DriverConnectionCoordinator.getInstance().registerOrUpdateFromQrPairing(
                             new RegisteredPleosDevice(
                                     "qr_" + result.vehicleId,
-                                    "C01 차량 단말",
+                                    "연동 차량",
                                     "QR:" + result.vehicleId.substring(0, Math.min(8, result.vehicleId.length())),
                                     resolvedAlias,
                                     true,
@@ -455,7 +455,7 @@ public class M02NoVehicleFragment extends Fragment {
         }
         String info = "로그인 계정: " + session.getEmail()
                 + "\n계정 식별자(sub): " + session.getUserId()
-                + "\n연동 방식: 화면 내장 카메라(C01) QR 스캔 + 6자리 확인 코드 대조";
+                + "\n연동 방식: 화면 내장 카메라 QR 스캔 + 6자리 확인 코드 대조";
         binding.tvM02SessionInfo.setText(info);
     }
 
@@ -496,10 +496,10 @@ public class M02NoVehicleFragment extends Fragment {
         }
         Boolean camGranted = result.get(Manifest.permission.CAMERA);
         if (Boolean.TRUE.equals(camGranted)) {
-            binding.tvM02QrStatus.setText("상태: 내장 카메라 스캐너가 활성화되었습니다. 차량 화면(C01)의 QR 코드를 비춰주세요.");
+            binding.tvM02QrStatus.setText("상태: 내장 카메라 스캐너가 활성화되었습니다. 차량 화면의 QR 코드를 비춰주세요.");
             binding.barcodeScannerM02.resume();
         } else {
-            binding.tvM02QrStatus.setText("상태: 카메라 권한이 거부되었습니다. [카메라 스캔 다시 시작] 또는 [차량(C01) QR 인식]을 이용해 주세요.");
+            binding.tvM02QrStatus.setText("상태: 카메라 권한이 거부되었습니다. [카메라 스캔 다시 시작] 또는 [차량 QR 인식]을 이용해 주세요.");
         }
     }
 

@@ -177,7 +177,7 @@ public class M01LoginFragment extends Fragment {
                 "[필수] fuelog 서비스 이용약관",
                 "제1조(목적) 본 약관은 fuelog 스마트 차계부 서비스의 이용 조건 및 절차를 규정합니다.\n\n"
                         + "제2조(계정 및 보안) 회원은 본인의 이메일 계정을 통해 로그인하며, 비밀번호와 세션 토큰은 안전하게 암호화·관리됩니다.\n\n"
-                        + "제3조(서비스 내용) 차량 등록(M02), 주유·유지비 대시보드(M03) 및 데이터 동기화 기능을 제공합니다."
+                        + "제3조(서비스 내용) 차량 등록, 주유·유지비 대시보드 및 데이터 동기화 기능을 제공합니다."
         ));
 
         binding.btnViewPrivacyTerms.setOnClickListener(v -> showTermsDetailDialog(
@@ -187,7 +187,7 @@ public class M01LoginFragment extends Fragment {
                         + "• 선택기능 이용 시: 위치 정보(주유소 매칭), 근처 기기 연결 정보(블루투스/OBD), 알림 수신 토큰\n\n"
                         + "2. 수집 및 이용 목적\n"
                         + "• Supabase Auth 기반 회원 식별, 기기 간 차계부 데이터 동기화, 계정 복구 안내 발송\n\n"
-                        + "3. 선택 권한 비강제 원칙 (FR-M01-2)\n"
+                        + "3. 선택 권한 비강제 원칙\n"
                         + "• 선택 권한에 동의하지 않아도 회원가입과 로그인은 제한 없이 가능합니다."
         ));
 
@@ -205,7 +205,7 @@ public class M01LoginFragment extends Fragment {
             binding.etPassword.setText("fuelog1234");
             viewModel.clearMessages();
             Snackbar.make(binding.getRoot(),
-                    "차량 보유 계정(car@fuelog.com) 입력 완료 -> 로그인 시 M03으로 이동합니다.",
+                    "차량 보유 계정(car@fuelog.com) 입력 완료 -> 로그인 시 차량 홈으로 이동합니다.",
                     Snackbar.LENGTH_SHORT).show();
         });
 
@@ -218,7 +218,7 @@ public class M01LoginFragment extends Fragment {
             binding.etPassword.setText("fuelog1234");
             viewModel.clearMessages();
             Snackbar.make(binding.getRoot(),
-                    "차량 미보유 계정(new@fuelog.com) 입력 완료 -> 로그인 시 M02로 이동합니다.",
+                    "차량 미보유 계정(new@fuelog.com) 입력 완료 -> 로그인 시 차량 등록으로 이동합니다.",
                     Snackbar.LENGTH_SHORT).show();
         });
 

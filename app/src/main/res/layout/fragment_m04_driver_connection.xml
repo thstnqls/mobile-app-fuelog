@@ -192,7 +192,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="44dp"
                         android:layout_marginTop="8dp"
-                        android:text="차량(C03) QR 코드 스캔 / 온라인 확인"
+                        android:text="차량 QR 코드 스캔 / 온라인 확인"
                         android:textSize="12sp"
                         app:cornerRadius="10dp" />
                 </LinearLayout>
@@ -256,7 +256,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="주행 상태 및 보안 검증 (FR-M04-1 ~ M04-3)"
+                        android:text="주행 상태 및 보안 검증"
                         android:textColor="@color/fuelog_text_primary"
                         android:textSize="15sp"
                         android:textStyle="bold" />
@@ -266,7 +266,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
-                        android:text="차량 주행 중 (활성 시 '정차 후 적용'으로 보류 · C03 일치)"
+                        android:text="차량 주행 중 (활성 시 '정차 후 적용'으로 보류)"
                         android:textSize="12.5sp" />
 
                     <LinearLayout

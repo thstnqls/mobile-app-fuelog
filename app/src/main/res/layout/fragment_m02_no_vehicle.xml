@@ -35,7 +35,7 @@
                     android:paddingTop="4dp"
                     android:paddingEnd="10dp"
                     android:paddingBottom="4dp"
-                    android:text="C01 · M02 QR 코드 인식 전용"
+                    android:text="QR 코드 인식 전용"
                     android:textColor="@color/white"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -54,7 +54,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:lineSpacingExtra="3dp"
-                    android:text="다른 화면으로 이동하지 않고 아래 내장 카메라 영역에 차량 화면(C01)의 페어링 QR 코드를 비추면 6자리 확인 코드가 표시됩니다."
+                    android:text="다른 화면으로 이동하지 않고 아래 내장 카메라 영역에 차량 화면의 페어링 QR 코드를 비추면 6자리 확인 코드가 표시됩니다."
                     android:textColor="#B0B8C1"
                     android:textSize="13sp" />
 
@@ -90,7 +90,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="차량 디스플레이(C01) 승인 코드 입력"
+                        android:text="차량 디스플레이 승인 코드 입력"
                         android:textColor="#5CE1A6"
                         android:textSize="13sp"
                         android:textStyle="bold" />
@@ -102,7 +102,7 @@
                         android:layout_marginTop="6dp"
                         android:gravity="center"
                         android:lineSpacingExtra="2dp"
-                        android:text="차량 디스플레이(C01) 화면에 표시된 6자리 승인 코드를 입력해 주세요."
+                        android:text="차량 디스플레이 화면에 표시된 6자리 승인 코드를 입력해 주세요."
                         android:textColor="#D0D7DE"
                         android:textSize="12sp" />
 
@@ -180,7 +180,7 @@
                     android:background="#263040"
                     android:lineSpacingExtra="3dp"
                     android:padding="12dp"
-                    android:text="상태: 내장 카메라가 활성화되었습니다. 차량 화면(C01)의 QR 코드를 비춰주세요."
+                    android:text="상태: 내장 카메라가 활성화되었습니다. 차량 화면의 QR 코드를 비춰주세요."
                     android:textColor="#5CE1A6"
                     android:textSize="12sp"
                     android:textStyle="bold" />
@@ -222,7 +222,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="6dp"
                 android:layout_weight="1"
-                android:text="세션 만료 후 M01 이동"
+                android:text="세션 만료 테스트"
                 android:textSize="12sp" />
 
             <com.google.android.material.button.MaterialButton

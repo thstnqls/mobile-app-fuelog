@@ -143,8 +143,8 @@ public class M04DriverConnectionFragment extends Fragment {
             coordinator.registerOrUpdateFromQrPairing(
                     new RegisteredPleosDevice(
                             "qr_c03_device",
-                            "C01/C03 차량 단말",
-                            "QR:C03",
+                            "연동 차량",
+                            "QR 인증",
                             vAlias,
                             true,
                             true
@@ -168,7 +168,7 @@ public class M04DriverConnectionFragment extends Fragment {
         renderState();
         binding.tvM04ProofInfo.setVisibility(View.VISIBLE);
         binding.tvM04ProofInfo.setText(
-                "전송 채널: 차량 화면(C03) QR / 온라인 인증 요청 보냄\n"
+                "전송 채널: 차량 화면 QR / 온라인 인증 요청 보냄\n"
                         + "단기 증명 ID: " + proof.getProofId()
                         + " (차량=" + proof.getVehicleId()
                         + ", 운행=" + proof.getTripSessionId()
@@ -197,7 +197,7 @@ public class M04DriverConnectionFragment extends Fragment {
                     }
                     binding.tvM04ProofInfo.setVisibility(View.VISIBLE);
                     binding.tvM04ProofInfo.setText(
-                            "백엔드 API(C02/C03/M04) QR 인증 연동 완료:\n"
+                            "QR 인증 연동 완료:\n"
                                     + "• vehicleId: " + (result.vehicleId != null ? result.vehicleId : proof.getVehicleId()) + "\n"
                                     + "• installationId: " + (result.installationId != null ? result.installationId : "-") + "\n"
                                     + "• intervalId: " + (result.intervalId != null ? result.intervalId : proof.getTripSessionId()) + "\n"
@@ -220,11 +220,11 @@ public class M04DriverConnectionFragment extends Fragment {
             renderState();
 
             new MaterialAlertDialogBuilder(requireContext())
-                    .setTitle("앱 내 차량(C03) QR 코드 인식 / 온라인 확인")
-                    .setMessage("외부 카메라 액티비티 이동 없이 앱 내에서 차량(Pleos C03) QR 코드 및 온라인 인증을 확인합니다.\n\n"
+                    .setTitle("앱 내 차량 QR 코드 인식 / 온라인 확인")
+                    .setMessage("외부 카메라 액티비티 이동 없이 앱 내에서 차량 QR 코드 및 온라인 인증을 확인합니다.\n\n"
                             + "• 단기 증명 코드: " + (proof != null ? proof.getProofId() : "-") + "\n"
                             + "• 페이로드:\n" + qrPayload)
-                    .setPositiveButton("앱 내 C03 QR 인식 · 확인 완료", (d, w) -> {
+                    .setPositiveButton("앱 내 QR 인식 · 확인 완료", (d, w) -> {
                         if (proof != null) {
                             executeQrAuthenticationFlow(null);
                         }
@@ -289,7 +289,7 @@ public class M04DriverConnectionFragment extends Fragment {
         List<TripRecord> trips = homeRepository.getRecentTripsForSelectedVehicle();
         if (trips.isEmpty()) {
             TextView empty = new TextView(requireContext());
-            empty.setText("아직 백엔드 DB에 동기화된 운행 기록이 없습니다.\n홈 화면에서 운행 요약(C04) 동기화를 실행하면 DB에서 불러옵니다.");
+            empty.setText("아직 백엔드 DB에 동기화된 운행 기록이 없습니다.\n홈 화면에서 운행 요약 동기화를 실행하면 DB에서 불러옵니다.");
             empty.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_secondary));
             empty.setTextSize(13f);
             binding.containerM04DrivingTrips.addView(empty);

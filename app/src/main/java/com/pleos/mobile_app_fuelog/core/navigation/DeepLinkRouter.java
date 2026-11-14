@@ -188,14 +188,14 @@ public final class DeepLinkRouter {
                         Destination.M03_HAS_VEHICLE,
                         false,
                         null,
-                        "등록된 차량이 확인되어 M03(차량 홈) 화면으로 이동했습니다."
+                        "등록된 차량이 확인되어 차량 홈 화면으로 이동했습니다."
                 );
             } else {
                 return new RouteDecision(
                         Destination.M02_NO_VEHICLE,
                         false,
                         null,
-                        "등록된 차량이 없어 M02(첫 차량 등록) 화면으로 이동했습니다."
+                        "등록된 차량이 없어 첫 차량 등록 화면으로 이동했습니다."
                 );
             }
         }
@@ -209,7 +209,7 @@ public final class DeepLinkRouter {
                     true,
                     null,
                     "푸시 딥링크(" + deepLink.getFeatureLabel() + ")를 재검사한 결과, "
-                            + "현재 계정에 등록된 차량이 없어 M02(차량 등록) 화면으로 먼저 안내합니다."
+                            + "현재 계정에 등록된 차량이 없어 차량 등록 화면으로 먼저 안내합니다."
             );
         }
 

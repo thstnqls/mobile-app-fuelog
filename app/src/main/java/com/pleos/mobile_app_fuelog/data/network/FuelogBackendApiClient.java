@@ -2970,7 +2970,7 @@ public final class FuelogBackendApiClient {
             SafeLogger.w("submitQrIntentForConfirmationCode 예외: " + e.getMessage());
             return new QrIntentCodeResult(false, null, null, "error", targetVehicleName, e.getMessage());
         }
-        return new QrIntentCodeResult(false, null, null, "invalid_qr", targetVehicleName, "유효한 C01 페어링 QR 코드가 아닙니다.");
+        return new QrIntentCodeResult(false, null, null, "invalid_qr", targetVehicleName, "유효한 페어링 QR 코드가 아닙니다.");
     }
 
     /**

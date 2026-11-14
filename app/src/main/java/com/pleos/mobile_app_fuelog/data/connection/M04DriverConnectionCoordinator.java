@@ -45,7 +45,7 @@ public final class M04DriverConnectionCoordinator {
     private String localPhoneDeviceId = "phone_pixel10_main";
 
     private M04ConnectionStage currentStage = M04ConnectionStage.CONNECTING;
-    private String statusDetailMessage = "차량 화면(C01/C03) QR 인식으로 연동할 준비가 되었습니다.";
+    private String statusDetailMessage = "차량 화면 QR 인식으로 연동할 준비가 되었습니다.";
 
     // FR-M04-1: 블루투스 오디오 연결 상태와 fuelog 앱 인증 상태를 별개로 관리
     private boolean bluetoothAudioConnected = false;
@@ -208,10 +208,10 @@ public final class M04DriverConnectionCoordinator {
 
         if (vehicleDriving) {
             this.deferredUntilStopped = true;
-            this.statusDetailMessage = "요청 보냄 · 현재 주행 중이므로 '정차 후 적용'으로 보류되었습니다 (차량 C03 화면과 일치).";
+            this.statusDetailMessage = "요청 보냄 · 현재 주행 중이므로 '정차 후 적용'으로 보류되었습니다.";
         } else {
             this.deferredUntilStopped = false;
-            this.statusDetailMessage = "요청 보냄 · 차량(Pleos C03)의 사용자 확인 응답을 기다리고 있습니다.";
+            this.statusDetailMessage = "요청 보냄 · 차량의 사용자 확인 응답을 기다리고 있습니다.";
         }
 
         return proof;
@@ -282,7 +282,7 @@ public final class M04DriverConnectionCoordinator {
             this.requestSentWaitingAck = true;
             this.fuelogAppAuthenticated = false;
             this.currentStage = M04ConnectionStage.WAITING_VEHICLE_CONFIRM;
-            this.statusDetailMessage = "정차 후 적용 보류 중 (차량 C03 동기화 완료 · 안전을 위해 정차 시 내 계정으로 전환됩니다).";
+            this.statusDetailMessage = "정차 후 적용 보류 중 (차량 동기화 완료 · 안전을 위해 정차 시 내 계정으로 전환됩니다).";
             return true;
         }
 
@@ -291,7 +291,7 @@ public final class M04DriverConnectionCoordinator {
         this.requestSentWaitingAck = false;
         this.fuelogAppAuthenticated = true;
         this.currentStage = M04ConnectionStage.IN_USE;
-        this.statusDetailMessage = "사용 중 · 이번 운행(" + currentTripSessionId + ")에 내 계정이 등록되었습니다 (차량 C03 일치).";
+        this.statusDetailMessage = "사용 중 · 이번 운행(" + currentTripSessionId + ")에 내 계정이 등록되었습니다.";
         return true;
     }
 
@@ -305,10 +305,10 @@ public final class M04DriverConnectionCoordinator {
             this.requestSentWaitingAck = false;
             this.fuelogAppAuthenticated = true;
             this.currentStage = M04ConnectionStage.IN_USE;
-            this.statusDetailMessage = "차량 정차 감지 · 보류되었던 '이번 운행에 내 계정 사용'이 최종 적용되었습니다 (C03 일치).";
+            this.statusDetailMessage = "차량 정차 감지 · 보류되었던 '이번 운행에 내 계정 사용'이 최종 적용되었습니다.";
         } else if (driving && currentStage == M04ConnectionStage.WAITING_VEHICLE_CONFIRM) {
             this.deferredUntilStopped = true;
-            this.statusDetailMessage = "요청 보냄 · 주행 중이므로 '정차 후 적용'으로 보류됩니다 (차량 C03과 일치).";
+            this.statusDetailMessage = "요청 보냄 · 주행 중이므로 '정차 후 적용'으로 보류됩니다.";
         }
     }
 

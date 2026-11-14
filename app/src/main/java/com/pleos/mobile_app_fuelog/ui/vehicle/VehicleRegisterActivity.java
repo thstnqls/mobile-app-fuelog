@@ -95,7 +95,7 @@ public class VehicleRegisterActivity extends AppCompatActivity {
         binding.barcodeScannerRegister.getBarcodeView().setDecoderFactory(
                 new DefaultDecoderFactory(Collections.singletonList(BarcodeFormat.QR_CODE))
         );
-        binding.barcodeScannerRegister.setStatusText("차량 디스플레이(C01)의 QR 코드를 사각형 안에 맞춰주세요");
+        binding.barcodeScannerRegister.setStatusText("차량 디스플레이의 QR 코드를 사각형 안에 맞춰주세요");
         binding.barcodeScannerRegister.decodeContinuous(result -> {
             if (binding == null || isProcessingQr || result.getText() == null || result.getText().trim().isEmpty()) {
                 return;
@@ -214,7 +214,7 @@ public class VehicleRegisterActivity extends AppCompatActivity {
                     startCodeCountdownTimer();
 
                     binding.tvRegisterConfirmationCodeGuide.setText(
-                            "차량 디스플레이(C01) 화면에 표시된 6자리 승인 코드를 입력해 주세요.\n"
+                            "차량 디스플레이 화면에 표시된 6자리 승인 코드를 입력해 주세요.\n"
                                     + "(대상 차량: " + pendingVehicleAlias + ")"
                     );
                     Snackbar.make(binding.getRoot(),
@@ -224,7 +224,7 @@ public class VehicleRegisterActivity extends AppCompatActivity {
                     isProcessingQr = false;
                     startCameraWithPermissionCheck();
                     Snackbar.make(binding.getRoot(),
-                            "QR 코드 검증 실패: " + (codeResult.errorMessage != null ? codeResult.errorMessage : "유효한 C01 QR 코드를 비춰주세요."),
+                            "QR 코드 검증 실패: " + (codeResult.errorMessage != null ? codeResult.errorMessage : "유효한 QR 코드를 비춰주세요."),
                             Snackbar.LENGTH_LONG).show();
                 }
             });
@@ -348,7 +348,7 @@ public class VehicleRegisterActivity extends AppCompatActivity {
                     coordinator.registerOrUpdateFromQrPairing(
                             new RegisteredPleosDevice(
                                     "qr_" + vehicleId,
-                                    "C01 차량 단말",
+                                    "연동 차량",
                                     "QR:" + vehicleId.substring(0, Math.min(8, vehicleId.length())),
                                     vehicleName,
                                     true,

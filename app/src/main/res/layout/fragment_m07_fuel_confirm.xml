@@ -100,7 +100,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
-                        android:text="차량 F01 연료 센서에서 주유가 감지되었습니다. 영수증을 확인하고 실제 결제 금액을 확정해 주세요."
+                        android:text="차량 연료 센서에서 주유가 감지되었습니다. 영수증을 확인하고 실제 결제 금액을 확정해 주세요."
                         android:textColor="@color/fuelog_text_secondary"
                         android:textSize="12.5sp" />
 
