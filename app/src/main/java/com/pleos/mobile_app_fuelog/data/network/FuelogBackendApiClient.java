@@ -397,8 +397,8 @@ public final class FuelogBackendApiClient {
             payload.put("proof", proof);
             if (existingVehicleId != null && !existingVehicleId.trim().isEmpty()) {
                 payload.put("vehicle_id", existingVehicleId.trim());
-            } else {
-                payload.put("new_vehicle_name", newVehicleName != null ? newVehicleName.trim() : "내 차");
+            } else if (newVehicleName != null && !newVehicleName.trim().isEmpty()) {
+                payload.put("new_vehicle_name", newVehicleName.trim());
             }
             writeBody(conn, payload.toString());
 
@@ -1785,11 +1785,11 @@ public final class FuelogBackendApiClient {
 
         @NonNull
         public String getDisplayName() {
-            if (vehicleName != null && !vehicleName.trim().isEmpty()) {
-                return vehicleName.trim();
-            }
             if (name != null && !name.trim().isEmpty()) {
                 return name.trim();
+            }
+            if (vehicleName != null && !vehicleName.trim().isEmpty()) {
+                return vehicleName.trim();
             }
             return "차량 " + (vehicleId != null && vehicleId.length() >= 8 ? vehicleId.substring(0, 8) : "");
         }
@@ -2818,9 +2818,7 @@ public final class FuelogBackendApiClient {
         if (session == null || session.getAccessToken().startsWith("local_jwt_")) {
             return new QrIntentCodeResult(false, null, null, "unauthorized", preferredVehicleName, "로그인이 필요합니다.");
         }
-        String targetVehicleName = preferredVehicleName.trim().isEmpty()
-                ? "QR 연동 차량"
-                : preferredVehicleName.trim();
+        String targetVehicleName = preferredVehicleName != null ? preferredVehicleName.trim() : "";
 
         String raw = (scannedQrPayload != null && !scannedQrPayload.trim().isEmpty())
                 ? scannedQrPayload.trim()
@@ -2842,6 +2840,16 @@ public final class FuelogBackendApiClient {
                 String type = qrJson.optString("type", rootJson.optString("type", ""));
                 String userId = session.getUserId();
                 String existingVehicleId = cacheManager.getRegisteredVehicleUuid(userId);
+                if (existingVehicleId == null || existingVehicleId.isEmpty()) {
+                    List<BackendVehicleItem> existingVehicles = fetchMobileVehicles();
+                    if (!existingVehicles.isEmpty()) {
+                        BackendVehicleItem first = existingVehicles.get(0);
+                        existingVehicleId = first.vehicleId != null ? first.vehicleId : first.id;
+                        targetVehicleName = first.getDisplayName();
+                        cacheManager.setRegisteredVehicleUuid(userId, existingVehicleId);
+                        cacheManager.setRegisteredVehicleForUser(userId, targetVehicleName);
+                    }
+                }
 
                 // =========================================================================
                 // Case 1: [C02 / C03 운행 사용자 승인 QR] {"type":"fuelog.trip-user", "challengeId":"...", "proof":"..."}
@@ -2929,7 +2937,12 @@ public final class FuelogBackendApiClient {
                 String reqId = qrJson.optString("request_id", qrJson.optString("requestId", rootJson.optString("request_id", rootJson.optString("requestId", ""))));
                 if (!reqId.isEmpty() && !proof.isEmpty()) {
                     previewPairingQr(reqId, proof);
-                    PairingStatusResponse intentResp = submitPairingIntent(reqId, proof, null, targetVehicleName);
+                    PairingStatusResponse intentResp = submitPairingIntent(
+                            reqId,
+                            proof,
+                            existingVehicleId,
+                            (existingVehicleId != null && !existingVehicleId.isEmpty()) ? null : (targetVehicleName.isEmpty() ? null : targetVehicleName)
+                    );
                     if (intentResp.isSuccess() && intentResp.confirmationCode != null) {
                         String resolvedName = intentResp.selectedVehicleName != null
                                 ? intentResp.selectedVehicleName
@@ -3150,9 +3163,7 @@ public final class FuelogBackendApiClient {
             return new EndToEndVehicleSyncResult(false, null, null, null, fallbackVehicleName, null, null, null, null);
         }
         String userId = session.getUserId();
-        String targetVehicleName = fallbackVehicleName.trim().isEmpty()
-                ? "QR 연동 차량"
-                : fallbackVehicleName.trim();
+        String targetVehicleName = fallbackVehicleName != null ? fallbackVehicleName.trim() : "";
 
         // 1) 스캔된 QR JSON 페이로드가 전달된 경우 파싱 후 백엔드 QR 검증 API 호출
         if (scannedQrPayload != null && !scannedQrPayload.trim().isEmpty()) {
@@ -3201,7 +3212,13 @@ public final class FuelogBackendApiClient {
                         }
                     } else if (!reqId.isEmpty() && !proof.isEmpty()) {
                         previewPairingQr(reqId, proof);
-                        PairingStatusResponse intentResp = submitPairingIntent(reqId, proof, null, targetVehicleName);
+                        String currentVehId = cacheManager.getRegisteredVehicleUuid(userId);
+                        PairingStatusResponse intentResp = submitPairingIntent(
+                                reqId,
+                                proof,
+                                currentVehId,
+                                (currentVehId != null && !currentVehId.isEmpty()) ? null : (targetVehicleName.isEmpty() ? null : targetVehicleName)
+                        );
                         getPairingRequestStatus(reqId);
                         String instId = cacheManager.getInstallationId(userId);
                         String instSecret = cacheManager.getInstallationSecret(userId);
@@ -3576,18 +3593,8 @@ public final class FuelogBackendApiClient {
     }
 
     public boolean renameVehicle(String vehicleId, String name) {
-        String token = authRepository.getValidAccessToken();
-        if (token == null || name.isBlank() || name.trim().length() > 100) return false;
-        HttpURLConnection conn = null;
-        try {
-            conn = openMobileJwtConnection("/mobile/vehicles/" + UUID.fromString(vehicleId) + "/name", "PUT", token);
-            conn.setDoOutput(true);
-            try (var output = conn.getOutputStream()) {
-                output.write(new JSONObject().put("vehicle_name", name.trim()).toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            }
-            return conn.getResponseCode() == 200;
-        } catch (Exception failure) { return false; }
-        finally { if (conn != null) conn.disconnect(); }
+        SafeLogger.w("차량명 수정 기능은 현재 비활성화되어 있습니다 (서버 vehicles.name 직접 참조).");
+        return false;
     }
 
     public boolean disconnectVehicle(String vehicleId, String operationId) {

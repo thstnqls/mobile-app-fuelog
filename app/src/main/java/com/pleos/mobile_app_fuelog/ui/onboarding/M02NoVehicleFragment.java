@@ -71,7 +71,7 @@ public class M02NoVehicleFragment extends Fragment {
     @Nullable
     private String pendingConfirmationCode = null;
     @NonNull
-    private String pendingVehicleAlias = "QR 연동 차량";
+    private String pendingVehicleAlias = "";
 
     @Nullable
     private CountDownTimer codeCountDownTimer = null;
@@ -160,7 +160,7 @@ public class M02NoVehicleFragment extends Fragment {
             binding.barcodeScannerM02.pause();
             String scannedQr = result.getText().trim();
             binding.tvM02QrStatus.setText("상태: QR 스캔 완료 · 서버에서 6자리 비교 확인 코드를 발급받는 중...");
-            requestSixDigitConfirmationCode(scannedQr, "QR 연동 차량");
+            requestSixDigitConfirmationCode(scannedQr, "");
         });
     }
 
@@ -422,7 +422,7 @@ public class M02NoVehicleFragment extends Fragment {
                     M04DriverConnectionCoordinator.getInstance().registerOrUpdateFromQrPairing(
                             new RegisteredPleosDevice(
                                     "qr_" + result.vehicleId,
-                                    "C01 QR 연동 차량 단말",
+                                    "C01 차량 단말",
                                     "QR:" + result.vehicleId.substring(0, Math.min(8, result.vehicleId.length())),
                                     resolvedAlias,
                                     true,

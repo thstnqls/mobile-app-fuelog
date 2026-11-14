@@ -143,7 +143,7 @@ public class M04DriverConnectionFragment extends Fragment {
             coordinator.registerOrUpdateFromQrPairing(
                     new RegisteredPleosDevice(
                             "qr_c03_device",
-                            "C01/C03 QR 연동 차량 단말",
+                            "C01/C03 차량 단말",
                             "QR:C03",
                             vAlias,
                             true,

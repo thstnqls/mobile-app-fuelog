@@ -26,6 +26,7 @@ import com.pleos.mobile_app_fuelog.data.auth.AuthSession;
 import com.pleos.mobile_app_fuelog.data.cache.UserCacheManager;
 import com.pleos.mobile_app_fuelog.data.connection.M04DriverConnectionCoordinator;
 import com.pleos.mobile_app_fuelog.data.connection.RegisteredPleosDevice;
+import com.pleos.mobile_app_fuelog.data.home.M03HomeRepository;
 import com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient;
 import com.pleos.mobile_app_fuelog.databinding.FragmentManageSettingsBinding;
 import com.pleos.mobile_app_fuelog.ui.auth.M01LoginViewModel;
@@ -120,11 +121,26 @@ public class ManageSettingsFragment extends Fragment {
 
         Executors.newSingleThreadExecutor().execute(() -> {
             FuelogBackendApiClient api = FuelogBackendApiClient.getInstance(authRepository);
-            FuelogBackendApiClient.VehicleHomeResponse home =
-                    api.fetchVehicleHome(instSecret, userCacheManager.getActiveScopedToken());
-            if (home.success && home.vehicleAlias != null && !home.vehicleAlias.trim().isEmpty()) {
-                userCacheManager.setRegisteredVehicleForUser(userId, home.vehicleAlias.trim());
-                coordinator.setVehicleAlias(home.vehicleAlias.trim());
+            List<FuelogBackendApiClient.BackendVehicleItem> vehicles = api.fetchMobileVehicles();
+            String currentVid = userCacheManager.getRegisteredVehicleUuid(userId);
+            if (vehicles != null && !vehicles.isEmpty()) {
+                for (FuelogBackendApiClient.BackendVehicleItem v : vehicles) {
+                    String vid = v.vehicleId != null ? v.vehicleId : v.id;
+                    userCacheManager.setServerVehicleName(vid, v.getDisplayName());
+                }
+                String effective = null;
+                if (currentVid != null) {
+                    effective = userCacheManager.getEffectiveVehicleName(currentVid);
+                }
+                if (effective == null) {
+                    String firstVid = vehicles.get(0).vehicleId != null ? vehicles.get(0).vehicleId : vehicles.get(0).id;
+                    effective = userCacheManager.getEffectiveVehicleName(firstVid);
+                    if (effective == null) {
+                        effective = vehicles.get(0).getDisplayName();
+                    }
+                }
+                userCacheManager.setRegisteredVehicleForUser(userId, effective.trim());
+                coordinator.setVehicleAlias(effective.trim());
                 if (isAdded() && getActivity() != null) {
                     requireActivity().runOnUiThread(this::renderAll);
                 }
@@ -133,7 +149,7 @@ public class ManageSettingsFragment extends Fragment {
     }
 
     private void setupListeners() {
-        // 1. 내 차량 (별칭 수정 다이얼로그)
+        // 1. 내 차량 (로컬 별칭 수정 다이얼로그)
         binding.rowManageCurrentVehicle.setOnClickListener(v -> showEditAliasDialog());
 
         // 2. 차량 등록 (전용 VehicleRegisterActivity로 화면 전환)
@@ -240,43 +256,73 @@ public class ManageSettingsFragment extends Fragment {
             navigateToM01();
             return;
         }
-        String currentAlias = userCacheManager.getVisibleCachedVehicleName();
-        if (currentAlias == null || currentAlias.isEmpty()) {
-            currentAlias = "내 차량";
+        String userId = session.getUserId();
+        String vehicleId = userCacheManager.getRegisteredVehicleUuid(userId);
+        if (vehicleId == null || vehicleId.isEmpty()) {
+            Snackbar.make(binding.getRoot(), "선택된 차량이 없습니다.", Snackbar.LENGTH_SHORT).show();
+            return;
         }
+
+        String serverName = userCacheManager.getServerVehicleName(vehicleId);
+        if (serverName == null || serverName.isEmpty()) {
+            com.pleos.mobile_app_fuelog.data.home.VehicleProfile vp =
+                    M03HomeRepository.getInstance().getVehicleProfile(vehicleId);
+            if (vp != null && !vp.getDisplayName().isEmpty()) {
+                serverName = vp.getDisplayName();
+                userCacheManager.setServerVehicleName(vehicleId, serverName);
+            }
+        }
+        String customAlias = userCacheManager.getVehicleCustomAlias(vehicleId);
+        String currentDisplay = (customAlias != null && !customAlias.isEmpty())
+                ? customAlias
+                : (serverName != null && !serverName.isEmpty() ? serverName : "내 차량");
+        String hintName = (serverName != null && !serverName.isEmpty()) ? serverName : "내 차량";
 
         EditText input = new EditText(requireContext());
         input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setText(currentAlias);
-        input.setSelection(currentAlias.length());
+        input.setHint(hintName);
+        input.setHintTextColor(android.graphics.Color.parseColor("#9E9E9E"));
+        input.setText(currentDisplay);
+        input.setSelection(currentDisplay.length());
+
+        android.widget.FrameLayout container = new android.widget.FrameLayout(requireContext());
+        android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        int marginHorizontal = (int) (24 * getResources().getDisplayMetrics().density);
+        int marginVertical = (int) (8 * getResources().getDisplayMetrics().density);
+        params.leftMargin = marginHorizontal;
+        params.rightMargin = marginHorizontal;
+        params.topMargin = marginVertical;
+        params.bottomMargin = marginVertical;
+        input.setLayoutParams(params);
+        container.addView(input);
 
         new MaterialAlertDialogBuilder(requireContext())
-                .setTitle("차량 별칭 수정")
-                .setMessage("차량 홈 및 통계에 표시될 대표 별칭을 입력하세요:")
-                .setView(input)
-                .setPositiveButton("저장", (d, w) -> {
-                    String newAlias = input.getText().toString().trim();
-                    if (!newAlias.isEmpty()) {
-                        AuthSession s = authRepository.getCurrentValidSession();
-                        if (s != null) {
-                            String vehicle = userCacheManager.getRegisteredVehicleUuid(s.getUserId());
-                            if (vehicle == null || newAlias.length() > 100) return;
-                            new Thread(() -> {
-                                boolean success = FuelogBackendApiClient.getInstance(authRepository).renameVehicle(vehicle, newAlias);
-                                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
-                                    if (binding == null) return;
-                                    AuthSession current = authRepository.getCurrentValidSession();
-                                    if (current == null || !current.getUserId().equals(s.getUserId())) return;
-                                    if (success) {
-                                        userCacheManager.setRegisteredVehicleForUser(s.getUserId(), newAlias);
-                                        coordinator.setVehicleAlias(newAlias);
-                                        renderAll();
-                                    }
-                                    Snackbar.make(binding.getRoot(), success ? "차량 이름을 서버에 저장했습니다." : "서버 저장 실패 · 오너 권한과 연결 상태를 확인해 주세요.", Snackbar.LENGTH_LONG).show();
-                                });
-                            }).start();
-                        }
+                .setTitle("차량 별명 수정")
+                .setMessage("앱 내에서 사용할 차량 별명을 설정합니다.\n(내용을 모두 지우고 확인을 누르면 서버 기본 이름으로 초기화됩니다)")
+                .setView(container)
+                .setPositiveButton("확인", (dialog, which) -> {
+                    String entered = input.getText() != null ? input.getText().toString().trim() : "";
+                    String finalName;
+                    if (entered.isEmpty()) {
+                        // 모두 지우고 확인 누르면 서버값 사용
+                        userCacheManager.setVehicleCustomAlias(vehicleId, null);
+                        String sName = userCacheManager.getServerVehicleName(vehicleId);
+                        finalName = (sName != null && !sName.isEmpty()) ? sName : hintName;
+                        Snackbar.make(binding.getRoot(), "서버 기본 차량명으로 복원되었습니다: " + finalName, Snackbar.LENGTH_SHORT).show();
+                    } else {
+                        // 로컬에서만 별명 수정 (서버에 전송하지 않음)
+                        userCacheManager.setVehicleCustomAlias(vehicleId, entered);
+                        finalName = entered;
+                        Snackbar.make(binding.getRoot(), "차량 별명이 로컬에 저장되었습니다: " + finalName, Snackbar.LENGTH_SHORT).show();
                     }
+
+                    userCacheManager.setRegisteredVehicleForUser(userId, finalName);
+                    coordinator.setVehicleAlias(finalName);
+                    M03HomeRepository.getInstance().updateVehicleDisplayName(vehicleId, finalName);
+                    renderAll();
                 })
                 .setNegativeButton("취소", null)
                 .show();

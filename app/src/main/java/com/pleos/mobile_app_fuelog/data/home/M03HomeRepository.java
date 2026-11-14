@@ -102,6 +102,13 @@ public final class M03HomeRepository {
     public synchronized void applyBackendUserVehicles(
             @NonNull List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.BackendVehicleItem> backendVehicles
     ) {
+        applyBackendUserVehicles(backendVehicles, null);
+    }
+
+    public synchronized void applyBackendUserVehicles(
+            @NonNull List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.BackendVehicleItem> backendVehicles,
+            @Nullable java.util.function.Function<String, String> nameResolver
+    ) {
         if (backendVehicles.isEmpty()) {
             return;
         }
@@ -120,7 +127,8 @@ public final class M03HomeRepository {
 
         for (com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.BackendVehicleItem bv : backendVehicles) {
             String vid = bv.vehicleId != null ? bv.vehicleId : bv.id;
-            String name = bv.getDisplayName();
+            String resolved = nameResolver != null ? nameResolver.apply(vid) : null;
+            String name = (resolved != null && !resolved.trim().isEmpty()) ? resolved.trim() : bv.getDisplayName();
             String fuelType = extractFuelTypeFromLabel(name);
             String plate = extractPlateFromLabel(name);
             boolean isShared = "MEMBER".equalsIgnoreCase(bv.role) || "MANAGER".equalsIgnoreCase(bv.role);
@@ -165,6 +173,19 @@ public final class M03HomeRepository {
         return false;
     }
 
+    @Nullable
+    public synchronized VehicleProfile getVehicleProfile(@Nullable String vehicleId) {
+        if (vehicleId == null || vehicleId.trim().isEmpty()) {
+            return null;
+        }
+        for (VehicleProfile v : vehicles) {
+            if (vehicleId.equals(v.getVehicleId())) {
+                return v;
+            }
+        }
+        return null;
+    }
+
     public synchronized void registerOrUpdateVehicle(@NonNull VehicleProfile profile) {
         for (int i = 0; i < vehicles.size(); i++) {
             if (vehicles.get(i).getVehicleId().equals(profile.getVehicleId())) {
@@ -178,6 +199,25 @@ public final class M03HomeRepository {
         vehicles.add(profile);
         if (selectedVehicleId == null) {
             selectedVehicleId = profile.getVehicleId();
+        }
+    }
+
+    public synchronized void updateVehicleDisplayName(@NonNull String vehicleId, @NonNull String newDisplayName) {
+        for (int i = 0; i < vehicles.size(); i++) {
+            VehicleProfile old = vehicles.get(i);
+            if (old.getVehicleId().equals(vehicleId)) {
+                vehicles.set(i, new VehicleProfile(
+                        old.getVehicleId(),
+                        extractPlateFromLabel(newDisplayName),
+                        extractFuelTypeFromLabel(newDisplayName),
+                        newDisplayName,
+                        old.isSharedVehicle(),
+                        old.getRole(),
+                        old.isPaired(),
+                        old.getInstallationId()
+                ));
+                return;
+            }
         }
     }
 
@@ -296,15 +336,21 @@ public final class M03HomeRepository {
                 : (selectedVehicleId != null ? selectedVehicleId : VEHICLE_ID_PRIMARY);
 
         if (homeResp.success) {
-            String alias = (homeResp.vehicleAlias != null && !homeResp.vehicleAlias.trim().isEmpty())
-                    ? homeResp.vehicleAlias.trim()
-                    : "연동 차량";
+            VehicleProfile existing = getVehicleProfile(targetVid);
+            String alias = (existing != null && !existing.getDisplayName().isEmpty())
+                    ? existing.getDisplayName()
+                    : ((homeResp.vehicleAlias != null && !homeResp.vehicleAlias.trim().isEmpty())
+                            ? homeResp.vehicleAlias.trim()
+                            : "등록 차량");
             registerOrUpdateVehicle(new VehicleProfile(
                     targetVid,
                     extractPlateFromLabel(alias),
                     extractFuelTypeFromLabel(alias),
                     alias,
-                    true
+                    existing != null ? existing.isSharedVehicle() : true,
+                    existing != null ? existing.getRole() : "OWNER",
+                    existing != null ? existing.isPaired() : true,
+                    existing != null ? existing.getInstallationId() : null
             ));
             if (selectedVehicleId == null) {
                 selectedVehicleId = targetVid;

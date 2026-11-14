@@ -57,7 +57,7 @@ public class VehicleRegisterActivity extends AppCompatActivity {
     @Nullable
     private String pendingConfirmationCode = null;
     @NonNull
-    private String pendingVehicleAlias = "QR 연동 차량";
+    private String pendingVehicleAlias = "";
 
     @Nullable
     private CountDownTimer codeCountDownTimer = null;
@@ -103,7 +103,7 @@ public class VehicleRegisterActivity extends AppCompatActivity {
             isProcessingQr = true;
             binding.barcodeScannerRegister.pause();
             String scannedQr = result.getText().trim();
-            requestSixDigitConfirmationCode(scannedQr, "QR 연동 차량");
+            requestSixDigitConfirmationCode(scannedQr, "");
         });
     }
 
@@ -348,7 +348,7 @@ public class VehicleRegisterActivity extends AppCompatActivity {
                     coordinator.registerOrUpdateFromQrPairing(
                             new RegisteredPleosDevice(
                                     "qr_" + vehicleId,
-                                    "C01 QR 연동 차량 단말",
+                                    "C01 차량 단말",
                                     "QR:" + vehicleId.substring(0, Math.min(8, vehicleId.length())),
                                     vehicleName,
                                     true,

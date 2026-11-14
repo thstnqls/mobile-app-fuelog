@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+  ic_driving_restricted_car_lock.xml
+  자동차 실루엣 + 중앙 안전 자물쇠 (직관적인 차량 잠금)
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+
+    <!-- Car Silhouette (Clean Minimal Line) -->
+    <path
+        android:strokeColor="#80FFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="
+            M12,62
+            L20,62
+            M32,62
+            L64,62
+            M76,62
+            L84,62
+            C86,62 88,60 88,58
+            L86,50
+            C85,46 82,44 78,44
+            L68,44
+            L58,30
+            C56.5,28 54,27 51,27
+            L30,27
+            C27,27 24.5,28.5 23,31
+            L14,44
+            L10,48
+            C8,50 8,53 8,56
+            L8,58
+            C8,60 10,62 12,62 Z" />
+
+    <!-- Left Wheel -->
+    <path
+        android:strokeColor="#80FFFFFF"
+        android:strokeWidth="3.5"
+        android:pathData="M26,62m-6,0a6,6 0 1,1 12,0a6,6 0 1,1 -12,0" />
+
+    <!-- Right Wheel -->
+    <path
+        android:strokeColor="#80FFFFFF"
+        android:strokeWidth="3.5"
+        android:pathData="M70,62m-6,0a6,6 0 1,1 12,0a6,6 0 1,1 -12,0" />
+
+    <!-- Center Big Safety Lock Badge -->
+    <!-- Background Circle for contrast -->
+    <path
+        android:fillColor="#FF191F28"
+        android:pathData="M48,46m-22,0a22,22 0 1,1 44,0a22,22 0 1,1 -44,0" />
+
+    <path
+        android:strokeColor="#FF00C473"
+        android:strokeWidth="2.5"
+        android:pathData="M48,46m-22,0a22,22 0 1,1 44,0a22,22 0 1,1 -44,0" />
+
+    <!-- Lock Shackle -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.0"
+        android:strokeLineCap="round"
+        android:pathData="M41,43 V38 C41,34 44,31 48,31 C52,31 55,34 55,38 V43" />
+
+    <!-- Lock Body -->
+    <path
+        android:fillColor="#FF00C473"
+        android:pathData="M38,43 h20 a3,3 0 0,1 3,3 v13 a3,3 0 0,1 -3,3 h-20 a3,3 0 0,1 -3,-3 v-13 a3,3 0 0,1 3,-3 z" />
+
+    <!-- Keyhole -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M48,50m-1.8,0a1.8,1.8 0 1,1 3.6,0a1.8,1.8 0 1,1 -3.6,0" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M48,51 L48,55" />
+
+</vector>

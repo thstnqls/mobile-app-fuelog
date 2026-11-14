@@ -138,7 +138,11 @@ public class M03VehicleHomeFragment extends Fragment {
             // 0) 백엔드 사용자의 전체 차량 목록(GET /mobile/vehicles) 조회 및 반영
             List<FuelogBackendApiClient.BackendVehicleItem> backendVehicles = apiClient.fetchMobileVehicles();
             if (!backendVehicles.isEmpty()) {
-                homeRepository.applyBackendUserVehicles(backendVehicles);
+                for (FuelogBackendApiClient.BackendVehicleItem bv : backendVehicles) {
+                    String vid = bv.vehicleId != null ? bv.vehicleId : bv.id;
+                    userCacheManager.setServerVehicleName(vid, bv.getDisplayName());
+                }
+                homeRepository.applyBackendUserVehicles(backendVehicles, userCacheManager::getEffectiveVehicleName);
                 String currentSelected = homeRepository.getSelectedVehicle() != null
                         ? homeRepository.getSelectedVehicle().getVehicleId() : null;
                 if (currentSelected == null || !homeRepository.hasVehicle(currentSelected)) {
@@ -159,7 +163,10 @@ public class M03VehicleHomeFragment extends Fragment {
                     FuelogBackendApiClient.SyncStatusResponse syncStatusResp =
                             apiClient.fetchSyncStatus(instSecret);
                     if (homeResp.success && homeResp.vehicleAlias != null && !homeResp.vehicleAlias.trim().isEmpty()) {
-                        userCacheManager.setRegisteredVehicleForUser(userId, homeResp.vehicleAlias.trim());
+                        String currentCached = userCacheManager.getVisibleCachedVehicleName();
+                        if (currentCached == null || currentCached.isEmpty()) {
+                            userCacheManager.setRegisteredVehicleForUser(userId, homeResp.vehicleAlias.trim());
+                        }
                     }
                     homeRepository.applyBackendVehicleHomeAndSync(instMe.vehicleId, homeResp, syncStatusResp);
                 }

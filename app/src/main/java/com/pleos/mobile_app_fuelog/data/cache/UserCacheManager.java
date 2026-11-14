@@ -31,6 +31,8 @@ public final class UserCacheManager {
 
     private static final String VEHICLE_REGISTRY_PREFIX = "account_vehicle_";
     private static final String VEHICLE_UUID_REGISTRY_PREFIX = "account_vehicle_uuid_";
+    private static final String SERVER_VEHICLE_NAME_PREFIX = "server_vehicle_name_";
+    private static final String VEHICLE_CUSTOM_ALIAS_PREFIX = "vehicle_custom_alias_";
     private static final String INSTALLATION_ID_PREFIX = "account_inst_id_";
     private static final String INSTALLATION_SECRET_PREFIX = "account_inst_secret_";
     private static final String KEY_ACTIVE_SCOPED_TOKEN = "active_trip_scoped_token";
@@ -185,6 +187,39 @@ public final class UserCacheManager {
         } else {
             putString(VEHICLE_UUID_REGISTRY_PREFIX + userId, vehicleUuid.trim());
         }
+    }
+
+    public synchronized void setServerVehicleName(@NonNull String vehicleId, @NonNull String serverName) {
+        if (!serverName.trim().isEmpty()) {
+            putString(SERVER_VEHICLE_NAME_PREFIX + vehicleId.trim(), serverName.trim());
+        }
+    }
+
+    @Nullable
+    public synchronized String getServerVehicleName(@NonNull String vehicleId) {
+        return getString(SERVER_VEHICLE_NAME_PREFIX + vehicleId.trim(), null);
+    }
+
+    public synchronized void setVehicleCustomAlias(@NonNull String vehicleId, @Nullable String customAlias) {
+        if (customAlias == null || customAlias.trim().isEmpty()) {
+            removeKey(VEHICLE_CUSTOM_ALIAS_PREFIX + vehicleId.trim());
+        } else {
+            putString(VEHICLE_CUSTOM_ALIAS_PREFIX + vehicleId.trim(), customAlias.trim());
+        }
+    }
+
+    @Nullable
+    public synchronized String getVehicleCustomAlias(@NonNull String vehicleId) {
+        return getString(VEHICLE_CUSTOM_ALIAS_PREFIX + vehicleId.trim(), null);
+    }
+
+    @Nullable
+    public synchronized String getEffectiveVehicleName(@NonNull String vehicleId) {
+        String custom = getVehicleCustomAlias(vehicleId);
+        if (custom != null && !custom.trim().isEmpty()) {
+            return custom.trim();
+        }
+        return getServerVehicleName(vehicleId);
     }
 
     @Nullable
