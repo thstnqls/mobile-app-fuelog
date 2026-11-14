@@ -55,6 +55,8 @@ public final class AuthRepository {
     private static final String KEY_REFRESH_TOKEN = "session_refresh_token";
     private static final String KEY_EXPIRES_AT = "session_expires_at";
     private static final String KEY_TERMS_ACCEPTED = "session_terms_accepted";
+    private static final String KEY_AUTO_LOGIN = "auth_auto_login";
+    private static final String KEY_SAVED_EMAIL = "auth_saved_email";
 
     private static final String ACCOUNT_PW_HASH_PREFIX = "local_acc_pwhash_";
     private static final String ACCOUNT_UID_PREFIX = "local_acc_uid_";
@@ -126,9 +128,18 @@ public final class AuthRepository {
         return AuthResult.recoverySuccess("지원되는 로그인 방식입니다.");
     }
 
+    private static boolean isMainThread() {
+        try {
+            return android.os.Looper.myLooper() != null && android.os.Looper.myLooper() == android.os.Looper.getMainLooper();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /**
-     * 현재 저장된 세션이 존재하고 만료되지 않았으면 반환한다.
-     * 만료된 경우 즉시 UserCacheManager를 통해 이전 계정 캐시를 숨김 처리하고 null을 반환한다.
+     * 현재 저장된 세션이 존재하면 반환한다.
+     * UI 메인 스레드 호출 시 네트워크 블로킹 및 강제 세션 삭제를 절대 수행하지 않으며,
+     * 만료된 경우 백그라운드 스레드에서 조용히 토큰 갱신을 실행한다.
      */
     @Nullable
     public synchronized AuthSession getCurrentValidSession() {
@@ -144,45 +155,84 @@ public final class AuthRepository {
         String expiresStr = getPref(KEY_EXPIRES_AT, null);
         boolean termsAccepted = Boolean.parseBoolean(getPref(KEY_TERMS_ACCEPTED, "false"));
 
-        if (userId == null || email == null || accessToken == null || expiresStr == null) {
+        if (userId == null || email == null) {
+            return null;
+        }
+        if ((accessToken == null || accessToken.trim().isEmpty())
+                && (refreshToken == null || refreshToken.trim().isEmpty())) {
             return null;
         }
 
-        long expiresAt;
-        try {
-            expiresAt = Long.parseLong(expiresStr);
-        } catch (NumberFormatException e) {
-            return null;
+        long expiresAt = 0L;
+        if (expiresStr != null) {
+            try {
+                expiresAt = Long.parseLong(expiresStr);
+            } catch (NumberFormatException ignored) {}
         }
 
         AuthSession session = new AuthSession(
                 userId,
                 email,
-                accessToken,
+                accessToken != null ? accessToken : "",
                 refreshToken != null ? refreshToken : "",
                 expiresAt,
                 termsAccepted
         );
 
+        // 1) UI 메인 스레드에서 호출된 경우:
+        //    절대 메인 스레드에서 네트워크(refresh)를 동기 호출하지 않고, 세션을 삭제하지 않는다.
+        //    저장된 자격증명/토큰이 있으면 즉시 세션을 반환해 화면이 멈춤 없이 열리도록 하고,
+        //    토큰이 만료되었으면 백그라운드 스레드에서 조용히 토큰을 갱신한다.
+        if (isMainThread()) {
+            if (session.isExpired(nowEpochSeconds) && isRemoteSupabaseConfigured() && !session.getRefreshToken().trim().isEmpty()) {
+                triggerBackgroundSessionRefresh(session);
+            }
+            return session;
+        }
+
+        // 2) 백그라운드 스레드에서 호출된 경우:
         if (session.isExpired(nowEpochSeconds)) {
             if (isRemoteSupabaseConfigured() && !session.getRefreshToken().trim().isEmpty()) {
                 AuthSession refreshed = refreshRemoteSupabaseSession(
+                        session.getUserId(),
                         session.getRefreshToken().trim(),
                         session.getEmail(),
                         session.isTermsAccepted()
                 );
-                if (refreshed != null && !refreshed.isExpired(nowEpochSeconds)) {
+                if (refreshed != null) {
                     saveSessionToPrefs(refreshed);
                     SafeLogger.i("만료된 JWT 세션을 refresh_token으로 자동 갱신 완료: user=" + refreshed.getUserId());
                     return refreshed;
                 }
             }
-            SafeLogger.w("세션 만료 감지(user=" + SafeLogger.maskEmail(email) + "). 재로그인이 필요합니다.");
-            clearStoredSessionTokensOnly();
-            userCacheManager.onSessionExpiredOrLoggedOut();
-            return null;
+            // 리프레시 토큰이 없거나 로컬 모드에서 만료된 경우
+            if (session.getRefreshToken().trim().isEmpty()) {
+                SafeLogger.w("세션 만료 감지(user=" + SafeLogger.maskEmail(email) + "). 재로그인이 필요합니다.");
+                clearStoredSessionTokensOnly();
+                userCacheManager.onSessionExpiredOrLoggedOut();
+                return null;
+            }
         }
         return session;
+    }
+
+    private void triggerBackgroundSessionRefresh(@NonNull AuthSession session) {
+        java.util.concurrent.Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                AuthSession refreshed = refreshRemoteSupabaseSession(
+                        session.getUserId(),
+                        session.getRefreshToken().trim(),
+                        session.getEmail(),
+                        session.isTermsAccepted()
+                );
+                if (refreshed != null) {
+                    saveSessionToPrefs(refreshed);
+                    SafeLogger.i("백그라운드 JWT 세션 자동 갱신 완료: user=" + refreshed.getUserId());
+                }
+            } catch (Exception e) {
+                SafeLogger.w("백그라운드 JWT 갱신 중 예외: " + e.getMessage());
+            }
+        });
     }
 
     /**
@@ -351,6 +401,7 @@ public final class AuthRepository {
     public synchronized void expireCurrentSession() {
         revokeBackendSessionAsync();
         putPref(KEY_EXPIRES_AT, "0");
+        clearStoredSessionTokensOnly();
         userCacheManager.onSessionExpiredOrLoggedOut();
     }
 
@@ -360,8 +411,41 @@ public final class AuthRepository {
     public synchronized void signOut() {
         revokeBackendSessionAsync();
         clearStoredSessionTokensOnly();
+        removePref(KEY_USER_ID);
+        removePref(KEY_EMAIL);
+        setAutoLoginEnabled(false);
         userCacheManager.onSessionExpiredOrLoggedOut();
         SafeLogger.i("로그아웃 완료 및 캐시 숨김 적용");
+    }
+
+    public synchronized boolean isAutoLoginEnabled() {
+        if (prefs != null) {
+            return prefs.getBoolean(KEY_AUTO_LOGIN, true);
+        }
+        return Boolean.parseBoolean(memoryPrefs.getOrDefault(KEY_AUTO_LOGIN, "true"));
+    }
+
+    public synchronized void setAutoLoginEnabled(boolean enabled) {
+        if (prefs != null) {
+            prefs.edit().putBoolean(KEY_AUTO_LOGIN, enabled).apply();
+        } else {
+            memoryPrefs.put(KEY_AUTO_LOGIN, Boolean.toString(enabled));
+        }
+    }
+
+    @Nullable
+    public synchronized String getSavedEmail() {
+        String saved = getPref(KEY_SAVED_EMAIL, null);
+        if (saved != null && !saved.trim().isEmpty()) {
+            return saved.trim();
+        }
+        return getPref(KEY_EMAIL, null);
+    }
+
+    public synchronized void setSavedEmail(@Nullable String email) {
+        if (email != null && !email.trim().isEmpty()) {
+            putPref(KEY_SAVED_EMAIL, email.trim());
+        }
     }
 
     private void revokeBackendSessionAsync() {
@@ -472,6 +556,10 @@ public final class AuthRepository {
                     );
                 }
                 session = verifySessionWithBackendMe(session);
+                saveSessionToPrefs(session);
+                setSavedEmail(session.getEmail());
+                setAutoLoginEnabled(true);
+
                 boolean hasRemoteVehicle = fetchRemoteHasVehicle(session.getAccessToken(), session.getUserId());
                 if (hasRemoteVehicle && !userCacheManager.hasRegisteredVehicle(session.getUserId())) {
                     userCacheManager.setRegisteredVehicleForUser(session.getUserId(), "등록 차량");
@@ -676,7 +764,6 @@ public final class AuthRepository {
 
     private boolean fetchRemoteHasVehicle(String accessToken, String userId) {
         try {
-            saveSessionToPrefs(new AuthSession(userId, "", accessToken, "", (System.currentTimeMillis() / 1000L) + 3600L, true));
             FuelogBackendApiClient client = FuelogBackendApiClient.getInstance(this);
 
             // 0) 백엔드 GET /mobile/vehicles 조회로 사용자의 실제 차량 존재 및 첫 번째 차량명 반영
@@ -745,6 +832,7 @@ public final class AuthRepository {
 
     @Nullable
     private AuthSession refreshRemoteSupabaseSession(
+            @NonNull String fallbackUserId,
             @NonNull String refreshToken,
             @NonNull String fallbackEmail,
             boolean termsAccepted
@@ -768,20 +856,27 @@ public final class AuthRepository {
             int status = conn.getResponseCode();
             if (status >= 200 && status < 300) {
                 String body = readResponseBody(conn, false);
-                AuthSession refreshed = parseSupabaseSession(body, fallbackEmail);
+                AuthSession refreshed = parseSupabaseSession(body, fallbackUserId, fallbackEmail);
                 if (refreshed != null) {
                     return new AuthSession(
                             refreshed.getUserId(),
                             refreshed.getEmail(),
                             refreshed.getAccessToken(),
-                            refreshed.getRefreshToken(),
+                            refreshed.getRefreshToken().isEmpty() ? refreshToken : refreshed.getRefreshToken(),
                             refreshed.getExpiresAtEpochSeconds(),
                             termsAccepted
                     );
                 }
+            } else if (status == 400 || status == 401) {
+                String errBody = readResponseBody(conn, true);
+                SafeLogger.w("Supabase refresh_token 무효화(status=" + status + "): " + errBody);
+                if (errBody.contains("invalid_grant") || errBody.contains("invalid_refresh_token")) {
+                    clearStoredSessionTokensOnly();
+                    userCacheManager.onSessionExpiredOrLoggedOut();
+                }
             }
         } catch (Exception e) {
-            SafeLogger.w("JWT refresh_token 갱신 실패: " + e.getMessage());
+            SafeLogger.w("JWT refresh_token 갱신 실패(일시적 네트워크 예외): " + e.getMessage());
         } finally {
             if (conn != null) {
                 conn.disconnect();
@@ -792,6 +887,11 @@ public final class AuthRepository {
 
     @Nullable
     private AuthSession parseSupabaseSession(String jsonBody, String fallbackEmail) throws Exception {
+        return parseSupabaseSession(jsonBody, null, fallbackEmail);
+    }
+
+    @Nullable
+    private AuthSession parseSupabaseSession(String jsonBody, @Nullable String fallbackUserId, String fallbackEmail) throws Exception {
         JSONObject root = new JSONObject(jsonBody);
         String accessToken = root.optString("access_token", "").trim();
         if (accessToken.isEmpty()) {
@@ -801,16 +901,24 @@ public final class AuthRepository {
         }
         String refreshToken = root.optString("refresh_token", "");
         long expiresIn = root.optLong("expires_in", 3600L);
-        long expiresAt = root.optLong("expires_at", (System.currentTimeMillis() / 1000L) + expiresIn);
+        long nowSec = System.currentTimeMillis() / 1000L;
+        long expiresAt = root.optLong("expires_at", nowSec + expiresIn);
+        if (expiresAt <= nowSec) {
+            expiresAt = nowSec + expiresIn;
+        }
 
         JSONObject userObj = root.optJSONObject("user");
         String userId;
         String email;
         if (userObj != null) {
-            userId = userObj.optString("id", "user_" + Math.abs(fallbackEmail.hashCode()));
+            userId = userObj.optString("id", (fallbackUserId != null && !fallbackUserId.isEmpty())
+                    ? fallbackUserId
+                    : "user_" + Math.abs(fallbackEmail.hashCode()));
             email = userObj.optString("email", fallbackEmail);
         } else {
-            userId = root.optString("id", "user_" + Math.abs(fallbackEmail.hashCode()));
+            userId = (fallbackUserId != null && !fallbackUserId.isEmpty())
+                    ? fallbackUserId
+                    : root.optString("id", "user_" + Math.abs(fallbackEmail.hashCode()));
             email = root.optString("email", fallbackEmail);
         }
 
@@ -841,6 +949,9 @@ public final class AuthRepository {
     private synchronized void saveSessionToPrefs(@NonNull AuthSession session) {
         putPref(KEY_USER_ID, session.getUserId());
         putPref(KEY_EMAIL, session.getEmail());
+        if (session.getEmail() != null && !session.getEmail().trim().isEmpty()) {
+            putPref(KEY_SAVED_EMAIL, session.getEmail().trim());
+        }
         putPref(KEY_ACCESS_TOKEN, session.getAccessToken());
         putPref(KEY_REFRESH_TOKEN, session.getRefreshToken());
         putPref(KEY_EXPIRES_AT, Long.toString(session.getExpiresAtEpochSeconds()));

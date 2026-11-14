@@ -74,9 +74,9 @@ public class M01LoginFragment extends Fragment {
         observeViewModel();
         refreshContextAndCacheBanner();
 
-        // 이미 유효한 세션이 존재하는 경우 뷰 트리가 완전히 마운트된 직후 M02/M03(또는 보류 딥링크)로 이동
+        // 이미 유효한 세션이 존재하고 자동 로그인이 켜져 있는 경우 뷰 트리가 완전히 마운트된 직후 M02/M03(또는 보류 딥링크)로 이동
         AuthSession existingSession = authRepository.getCurrentValidSession();
-        if (existingSession != null) {
+        if (existingSession != null && authRepository.isAutoLoginEnabled()) {
             view.post(() -> {
                 if (!isAdded() || binding == null) {
                     return;
@@ -88,7 +88,15 @@ public class M01LoginFragment extends Fragment {
                 );
                 navigateByDecision(decision);
             });
+            return;
         }
+
+        // 저장된 계정 이메일이 있으면 자동 완성 및 자동 로그인 체크박스 상태 초기화
+        String savedEmail = authRepository.getSavedEmail();
+        if (savedEmail != null && !savedEmail.trim().isEmpty() && (binding.etEmail.getText() == null || binding.etEmail.getText().toString().isEmpty())) {
+            binding.etEmail.setText(savedEmail.trim());
+        }
+        binding.cbAutoLogin.setChecked(authRepository.isAutoLoginEnabled());
     }
 
     private void setupTabs() {
@@ -254,6 +262,10 @@ public class M01LoginFragment extends Fragment {
                 perm -> PermissionGuideHelper.isPermissionGranted(requireContext(), perm);
 
         if (mode == M01LoginViewModel.AuthMode.LOGIN) {
+            authRepository.setAutoLoginEnabled(binding.cbAutoLogin.isChecked());
+            if (!email.trim().isEmpty()) {
+                authRepository.setSavedEmail(email.trim());
+            }
             viewModel.submitLogin(email, password, permChecker);
         } else if (mode == M01LoginViewModel.AuthMode.SIGN_UP) {
             viewModel.submitSignUp(
@@ -277,6 +289,7 @@ public class M01LoginFragment extends Fragment {
                 binding.tilPassword.setVisibility(View.VISIBLE);
                 binding.tilPasswordConfirm.setVisibility(View.GONE);
                 binding.layoutTermsConsent.setVisibility(View.GONE);
+                binding.layoutAutoLogin.setVisibility(View.VISIBLE);
                 binding.tvRecoveryModeGuide.setVisibility(View.GONE);
                 binding.btnSubmitPrimary.setText(R.string.m01_btn_submit_login);
                 binding.btnQuickRecovery.setVisibility(View.VISIBLE);
@@ -284,6 +297,7 @@ public class M01LoginFragment extends Fragment {
                 binding.tilPassword.setVisibility(View.VISIBLE);
                 binding.tilPasswordConfirm.setVisibility(View.VISIBLE);
                 binding.layoutTermsConsent.setVisibility(View.VISIBLE);
+                binding.layoutAutoLogin.setVisibility(View.GONE);
                 binding.tvRecoveryModeGuide.setVisibility(View.GONE);
                 binding.btnSubmitPrimary.setText(R.string.m01_btn_submit_signup);
                 binding.btnQuickRecovery.setVisibility(View.GONE);
@@ -291,6 +305,7 @@ public class M01LoginFragment extends Fragment {
                 binding.tilPassword.setVisibility(View.GONE);
                 binding.tilPasswordConfirm.setVisibility(View.GONE);
                 binding.layoutTermsConsent.setVisibility(View.GONE);
+                binding.layoutAutoLogin.setVisibility(View.GONE);
                 binding.tvRecoveryModeGuide.setVisibility(View.VISIBLE);
                 binding.btnSubmitPrimary.setText(R.string.m01_btn_submit_recovery);
                 binding.btnQuickRecovery.setVisibility(View.GONE);

@@ -110,7 +110,7 @@ public class MainActivity extends AppCompatActivity {
         if (savedInstanceState == null) {
             NavGraph navGraph = navController.getNavInflater().inflate(R.navigation.mobile_navigation);
             AuthSession savedSession = authRepository.getCurrentValidSession();
-            if (savedSession == null) {
+            if (savedSession == null || !authRepository.isAutoLoginEnabled()) {
                 navGraph.setStartDestination(R.id.nav_m01_login);
             } else {
                 boolean hasVehicle = userCacheManager.hasRegisteredVehicle(savedSession.getUserId());

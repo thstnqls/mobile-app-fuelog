@@ -401,6 +401,25 @@
                         android:textSize="13sp" />
                 </LinearLayout>
 
+                <!-- 로그인 상태 유지 (자동 로그인) 체크박스 -->
+                <LinearLayout
+                    android:id="@+id/layout_auto_login"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <CheckBox
+                        android:id="@+id/cb_auto_login"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="로그인 상태 유지 (자동 로그인)"
+                        android:textColor="@color/fuelog_text_secondary"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
                 <!-- 제출 버튼 & 로딩 인디케이터 (FR-M01-3 중복 제출 방지) -->
                 <FrameLayout
                     android:layout_width="match_parent"

@@ -200,4 +200,31 @@ public class M01LoginSpecTest {
         assertTrue(cacheManager.hasRegisteredVehicle("user_no_car"));
         assertEquals("veh-uuid-qr-01", cacheManager.getRegisteredVehicleUuid("user_no_car"));
     }
+
+    @Test
+    public void testAutoLoginAndSessionPersistence() {
+        // 1. 초기 자동 로그인 기본 활성화 확인
+        assertTrue(authRepository.isAutoLoginEnabled());
+
+        // 2. 로그인 성공 시 이메일 및 세션 영속화 확인
+        AuthResult loginResult = authRepository.signInWithEmail("car@fuelog.com", "fuelog1234");
+        assertTrue(loginResult.isSuccess());
+        assertEquals("car@fuelog.com", authRepository.getSavedEmail());
+
+        AuthSession session = authRepository.getCurrentValidSession();
+        assertNotNull(session);
+        assertEquals("car@fuelog.com", session.getEmail());
+
+        // 3. 자동 로그인 토글 확인
+        authRepository.setAutoLoginEnabled(false);
+        assertFalse(authRepository.isAutoLoginEnabled());
+        authRepository.setAutoLoginEnabled(true);
+        assertTrue(authRepository.isAutoLoginEnabled());
+
+        // 4. 로그아웃 시 자동 로그인 비활성화 및 세션 해제 확인 (저장된 이메일은 유지되어 재입력 편리)
+        authRepository.signOut();
+        assertNull(authRepository.getCurrentValidSession());
+        assertFalse(authRepository.isAutoLoginEnabled());
+        assertEquals("car@fuelog.com", authRepository.getSavedEmail());
+    }
 }
