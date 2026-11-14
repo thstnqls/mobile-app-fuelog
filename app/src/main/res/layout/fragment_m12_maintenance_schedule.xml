@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/fuelog_surface"
+    android:orientation="vertical">
+
+    <!-- 1. 상단 타이틀 & 뒤로가기 & 추가 버튼 영역 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/white"
+        android:elevation="1dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp">
+
+        <ImageButton
+            android:id="@+id/btn_m12_back"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="뒤로가기"
+            android:src="@drawable/ic_arrow_back" />
+
+        <LinearLayout
+            android:id="@+id/btn_m12_change_vehicle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackground"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="소모품 관리"
+                android:textColor="@color/fuelog_text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:id="@+id/btn_m12_vehicle_chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:background="@drawable/bg_vehicle_chip"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🚗 "
+                    android:textSize="11.5sp" />
+
+                <TextView
+                    android:id="@+id/tv_m12_vehicle_subtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="차량 로딩 중..."
+                    android:textColor="@color/fuelog_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="▼"
+                    android:textColor="@color/fuelog_primary"
+                    android:textSize="9sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_m12_switch_vehicle"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="6dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="11dp"
+            android:paddingVertical="0dp"
+            android:text="차량 변경"
+            android:textColor="@color/fuelog_text_primary"
+            android:textSize="11.5sp"
+            app:cornerRadius="18dp"
+            app:strokeColor="@color/fuelog_border"
+            app:strokeWidth="1dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_m12_add_plan"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:backgroundTint="@color/fuelog_primary"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="11dp"
+            android:paddingVertical="0dp"
+            android:text="+ 소모품 추가"
+            android:textColor="@color/white"
+            android:textSize="11.5sp"
+            android:textStyle="bold"
+            app:cornerRadius="18dp" />
+    </LinearLayout>
+
+    <!-- 2. 상단 상태 요약 배너 -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/card_m12_summary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="12dp"
+        app:cardBackgroundColor="@color/white"
+        app:cardCornerRadius="14dp"
+        app:cardElevation="0.5dp"
+        app:strokeColor="@color/fuelog_border"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="13dp">
+
+            <TextView
+                android:id="@+id/tv_m12_summary_icon"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:background="@drawable/bg_badge_rounded"
+                android:gravity="center"
+                android:text="🔧"
+                android:textSize="18sp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tv_m12_summary_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="소모품 관리 현황"
+                    android:textColor="@color/fuelog_text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_m12_summary_detail"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="전체 0개 소모품 항목 등록됨"
+                    android:textColor="@color/fuelog_text_secondary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="32dp"
+                android:layout_marginEnd="12dp"
+                android:background="@color/fuelog_border" />
+
+            <LinearLayout
+                android:id="@+id/layout_m12_odometer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="누적 주행거리"
+                    android:textColor="@color/fuelog_text_secondary"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/tv_m12_odometer_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="0 km"
+                    android:textColor="@color/fuelog_primary"
+                    android:textSize="14.5sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- 3. 메인 목록 영역 (FrameLayout) -->
+    <FrameLayout
+        android:id="@+id/container_m12_content"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1">
+
+        <!-- Empty View -->
+        <LinearLayout
+            android:id="@+id/layout_m12_empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="32dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@color/fuelog_surface_subtle"
+                android:gravity="center"
+                android:text="⚙️"
+                android:textSize="32sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="등록된 소모품 주기가 없습니다."
+                android:textColor="@color/fuelog_text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="'+ 소모품 추가' 버튼을 눌러\n엔진오일, 에어컨 필터 등의 교체 주기를 등록해보세요."
+                android:textColor="@color/fuelog_text_secondary"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- RecyclerView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_m12_plans"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="40dp"
+            tools:listitem="@layout/item_maintenance_schedule_card" />
+
+        <!-- 로딩 인디케이터 -->
+        <ProgressBar
+            android:id="@+id/progress_m12_loading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:indeterminateTint="@color/fuelog_primary"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+</LinearLayout>

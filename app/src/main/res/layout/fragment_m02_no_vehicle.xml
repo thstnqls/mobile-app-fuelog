@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/fuelog_surface"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <!-- 1. [전용] 차량 화면(C01) 인라인 카메라 QR 코드 스캔 카드 (화면 이동 없이 카드 내부에 카메라 뷰파인더 내장) -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/fuelog_dark_badge"
+            app:cardCornerRadius="18dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@color/fuelog_primary_dark"
+                    android:paddingStart="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="4dp"
+                    android:text="QR 코드 인식 전용"
+                    android:textColor="@color/white"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="차량 디스플레이의 QR 코드를\n스캔해 차량을 연동하세요"
+                    android:textColor="@color/white"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:lineSpacingExtra="3dp"
+                    android:text="다른 화면으로 이동하지 않고 아래 내장 카메라 영역에 차량 화면의 페어링 QR 코드를 비추면 6자리 확인 코드가 표시됩니다."
+                    android:textColor="#B0B8C1"
+                    android:textSize="13sp" />
+
+                <!-- 카드 내부에 바로 뚫려 있는 인라인 QR 카메라 스캐너 뷰파인더 -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="260dp"
+                    android:layout_marginTop="14dp"
+                    app:cardBackgroundColor="#000000"
+                    app:cardCornerRadius="14dp"
+                    app:cardElevation="0dp"
+                    app:strokeColor="#5CE1A6"
+                    app:strokeWidth="1.5dp">
+
+                    <com.journeyapps.barcodescanner.DecoratedBarcodeView
+                        android:id="@+id/barcode_scanner_m02"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- QR 스캔 후 차량 디스플레이(C01)의 6자리 승인 코드를 직접 입력하는 영역 -->
+                <LinearLayout
+                    android:id="@+id/layout_m02_confirmation_code"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:background="#1D2B3A"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical"
+                    android:padding="16dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="차량 디스플레이 승인 코드 입력"
+                        android:textColor="#5CE1A6"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_m02_confirmation_code_guide"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center"
+                        android:lineSpacingExtra="2dp"
+                        android:text="차량 디스플레이 화면에 표시된 6자리 승인 코드를 입력해 주세요."
+                        android:textColor="#D0D7DE"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/tv_m02_code_timer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center"
+                        android:text="남은 입력 시간: 02:00"
+                        android:textColor="#5CE1A6"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <EditText
+                        android:id="@+id/et_m02_confirmation_code"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:layout_marginTop="10dp"
+                        android:background="#0D1824"
+                        android:gravity="center"
+                        android:hint="6자리 승인 코드 입력"
+                        android:inputType="number"
+                        android:letterSpacing="0.2"
+                        android:maxLength="6"
+                        android:textColor="@color/white"
+                        android:textColorHint="#6C7A89"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_m02_code_error"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center"
+                        android:text="승인 코드가 일치하지 않습니다. 다시 확인해 주세요."
+                        android:textColor="#FF6B6B"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
+
+                    <LinearLayout
+                        android:id="@+id/layout_m02_code_loading"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <ProgressBar
+                            android:id="@+id/pb_m02_code_checking"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:indeterminateTint="#5CE1A6" />
+
+                        <TextView
+                            android:id="@+id/tv_m02_code_loading_text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="코드 검사 중..."
+                            android:textColor="#5CE1A6"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tv_m02_qr_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:background="#263040"
+                    android:lineSpacingExtra="3dp"
+                    android:padding="12dp"
+                    android:text="상태: 내장 카메라가 활성화되었습니다. 차량 화면의 QR 코드를 비춰주세요."
+                    android:textColor="#5CE1A6"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_m02_scan_qr_camera"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="12dp"
+                    android:text="카메라 스캔 다시 시작 / 권한 허용"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:backgroundTint="@color/fuelog_primary"
+                    app:cornerRadius="12dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            android:id="@+id/tv_m02_session_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:lineSpacingExtra="3dp"
+            android:textColor="@color/fuelog_text_secondary"
+            android:textSize="12sp" />
+
+        <!-- 세션 만료 / 다른 계정 전환 검증 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_m02_expire_session"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1"
+                android:text="세션 만료 테스트"
+                android:textSize="12sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_m02_logout"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:text="로그아웃 (다른 계정 전환)"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

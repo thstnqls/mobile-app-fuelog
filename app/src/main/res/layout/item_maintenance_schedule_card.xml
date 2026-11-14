@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="16dp"
+    android:layout_marginVertical="8dp"
+    app:cardBackgroundColor="@color/white"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="1dp"
+    app:strokeColor="@color/fuelog_border"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="18dp">
+
+        <!-- Header: 이름, 상태 뱃지, 더보기(삭제) 버튼 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_plan_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="엔진오일 &amp; 오일필터"
+                android:textColor="@color/fuelog_text_primary"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/badge_plan_risk"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_badge_rounded"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"
+                android:text="정상"
+                android:textColor="@color/fuelog_success_text"
+                android:textSize="11.5sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btn_plan_more"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="더보기"
+                android:src="@android:drawable/ic_menu_more" />
+        </LinearLayout>
+
+        <!-- D-Day 및 남은 거리 태그 영역 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_plan_dday"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@color/fuelog_info_bg"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"
+                android:text="D-35"
+                android:textColor="@color/fuelog_info_text"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_plan_remaining_km"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="3,200 km 남음"
+                android:textColor="@color/fuelog_primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 소모품 교체 주기 진행 바 -->
+        <ProgressBar
+            android:id="@+id/progress_plan_usage"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:layout_marginTop="10dp"
+            android:max="100"
+            android:progress="65"
+            android:progressTint="@color/fuelog_primary" />
+
+        <!-- 세부 주기 및 이력 그리드 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@color/fuelog_surface_subtle"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:text="교체 주기"
+                    android:textColor="@color/fuelog_text_secondary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tv_plan_interval"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="10,000 km / 12개월마다"
+                    android:textColor="@color/fuelog_text_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:text="최근 정비"
+                    android:textColor="@color/fuelog_text_secondary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tv_plan_last_service"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="2026-01-10 (42,000 km)"
+                    android:textColor="@color/fuelog_text_primary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:text="다음 예정"
+                    android:textColor="@color/fuelog_text_secondary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tv_plan_next_due"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="2027-01-10 (52,000 km)"
+                    android:textColor="@color/fuelog_text_primary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 액션 버튼: 주기 설정 / 정비 완료 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_edit_cycle"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="42dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:text="주기 설정"
+                android:textColor="@color/fuelog_text_primary"
+                android:textSize="13sp"
+                app:strokeColor="@color/fuelog_border" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_complete_maintenance"
+                android:layout_width="0dp"
+                android:layout_height="42dp"
+                android:layout_weight="1"
+                android:backgroundTint="@color/fuelog_primary"
+                android:text="정비 완료"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>
