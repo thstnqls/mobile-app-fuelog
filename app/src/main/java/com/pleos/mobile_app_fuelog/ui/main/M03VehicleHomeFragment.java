@@ -6,10 +6,8 @@ import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.LayoutInflater;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
@@ -45,6 +43,7 @@ import com.pleos.mobile_app_fuelog.data.home.VehicleProfile;
 import com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient;
 import com.pleos.mobile_app_fuelog.ui.auth.M01LoginFragment;
 import com.pleos.mobile_app_fuelog.ui.vehicle.VehicleRegisterActivity;
+import com.pleos.mobile_app_fuelog.ui.vehicle.VehicleSwitcherBottomSheetHelper;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -194,12 +193,11 @@ public class M03VehicleHomeFragment extends Fragment {
     }
 
     private void setupHeaderActions() {
-        // 상단 차량 카드 영역 좌우 스와이프 제스처 설정
-        setupVehicleSwipeGesture();
-
-        // 차량 변경 버튼 및 카드 영역 탭 시 차량 전환 팝업 열기
+        // 차량 변경 버튼 및 카드 영역 탭 시 차량 전환 바텀시트 열기
         binding.btnM03ChangeVehicle.setOnClickListener(v -> showVehicleSwitcherDialog());
+        binding.btnM03SwitchVehicle.setOnClickListener(v -> showVehicleSwitcherDialog());
         binding.cardM03VehicleSwipeArea.setOnClickListener(v -> showVehicleSwitcherDialog());
+        binding.layoutM03VehicleHeaderInfo.setOnClickListener(v -> showVehicleSwitcherDialog());
 
         // 동기화 배지 탭 시 온라인(백엔드 재동기화)/오프라인(마지막 갱신 시각) 전환
         binding.tvM03SyncStatus.setOnClickListener(v -> {
@@ -214,146 +212,6 @@ public class M03VehicleHomeFragment extends Fragment {
         binding.btnM03EmptyRegisterVehicle.setOnClickListener(v ->
                 registerVehicleLauncher.launch(new Intent(requireContext(), VehicleRegisterActivity.class))
         );
-    }
-
-    /**
-     * 상단 차량 카드 영역 좌우 스와이프(Fling) 제스처 리스너 등록
-     */
-    private void setupVehicleSwipeGesture() {
-        GestureDetector gestureDetector = new GestureDetector(requireContext(), new GestureDetector.SimpleOnGestureListener() {
-            private static final int SWIPE_THRESHOLD = 30;
-            private static final int SWIPE_VELOCITY_THRESHOLD = 50;
-
-            @Override
-            public boolean onDown(MotionEvent e) {
-                return true;
-            }
-
-            @Override
-            public boolean onSingleTapConfirmed(MotionEvent e) {
-                showVehicleSwitcherDialog();
-                return true;
-            }
-
-            @Override
-            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                if (e1 == null || e2 == null) return false;
-                float diffX = e2.getX() - e1.getX();
-                float diffY = e2.getY() - e1.getY();
-                if (Math.abs(diffX) > Math.abs(diffY)) {
-                    if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
-                        if (diffX > 0) {
-                            // 오른쪽으로 스와이프: 이전 차량
-                            switchToAdjacentVehicle(-1);
-                        } else {
-                            // 왼쪽으로 스와이프: 다음 차량
-                            switchToAdjacentVehicle(1);
-                        }
-                        return true;
-                    }
-                }
-                return false;
-            }
-        });
-
-        View.OnTouchListener touchListener = (v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                v.getParent().requestDisallowInterceptTouchEvent(true);
-            } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
-                v.getParent().requestDisallowInterceptTouchEvent(false);
-            }
-            return gestureDetector.onTouchEvent(event);
-        };
-
-        binding.cardM03VehicleSwipeArea.setOnTouchListener(touchListener);
-    }
-
-    private void switchToAdjacentVehicle(int direction) {
-        List<VehicleProfile> vehicles = homeRepository.getVehicles();
-        if (vehicles.isEmpty() || vehicles.size() <= 1) {
-            return;
-        }
-        VehicleProfile current = homeRepository.getSelectedVehicle();
-        int currentIndex = 0;
-        if (current != null) {
-            for (int i = 0; i < vehicles.size(); i++) {
-                if (vehicles.get(i).getVehicleId().equals(current.getVehicleId())) {
-                    currentIndex = i;
-                    break;
-                }
-            }
-        }
-
-        int newIndex = currentIndex + direction;
-        // API로 조회된 차량 목록의 경계를 벗어나지 않도록 클램핑 (무한 루프 방지)
-        if (newIndex < 0) {
-            animateBoundaryBounce(true);
-            return;
-        } else if (newIndex >= vehicles.size()) {
-            animateBoundaryBounce(false);
-            return;
-        }
-
-        switchToVehicleByIndex(newIndex);
-        animateVehicleCardTransition(direction);
-    }
-
-    private void animateBoundaryBounce(boolean isFirst) {
-        float bounceX = isFirst ? 28f : -28f;
-        binding.cardM03VehicleSwipeArea.animate()
-                .translationX(bounceX)
-                .setDuration(70)
-                .withEndAction(() -> {
-                    if (binding != null) {
-                        binding.cardM03VehicleSwipeArea.animate()
-                                .translationX(0f)
-                                .setDuration(90)
-                                .start();
-                    }
-                })
-                .start();
-    }
-
-    private void switchToVehicleByIndex(int index) {
-        List<VehicleProfile> vehicles = homeRepository.getVehicles();
-        if (index < 0 || index >= vehicles.size()) return;
-
-        VehicleProfile selected = vehicles.get(index);
-        homeRepository.setNewUserEmptyMode(false);
-        homeRepository.selectVehicle(selected.getVehicleId());
-
-        AuthSession session = authRepository.getCurrentValidSession();
-        if (session != null) {
-            String uid = session.getUserId();
-            userCacheManager.setRegisteredVehicleForUser(uid, selected.getDisplayName());
-            userCacheManager.setRegisteredVehicleUuid(uid, selected.getVehicleId());
-            if (selected.getInstallationId() != null) {
-                userCacheManager.setInstallationCredentials(
-                        uid,
-                        selected.getInstallationId(),
-                        userCacheManager.getInstallationSecret(uid)
-                );
-            }
-        }
-
-        renderDashboard();
-    }
-
-    private void animateVehicleCardTransition(int direction) {
-        float translationX = direction > 0 ? -90f : 90f;
-        binding.cardM03VehicleSwipeArea.animate()
-                .translationX(translationX)
-                .alpha(0.35f)
-                .setDuration(90)
-                .withEndAction(() -> {
-                    binding.cardM03VehicleSwipeArea.setTranslationX(-translationX);
-                    binding.cardM03VehicleSwipeArea.animate()
-                            .translationX(0f)
-                            .alpha(1.0f)
-                            .setDuration(120)
-                            .start();
-                })
-                .start();
     }
 
     private void setupExpenseCardActions() {
@@ -375,64 +233,74 @@ public class M03VehicleHomeFragment extends Fragment {
     private void showVehicleSwitcherDialog() {
         List<VehicleProfile> vehicles = homeRepository.getVehicles();
         if (vehicles.isEmpty()) {
-            registerVehicleLauncher.launch(new Intent(requireContext(), VehicleRegisterActivity.class));
+            Snackbar.make(binding.getRoot(), "차량 목록을 불러오는 중입니다...", Snackbar.LENGTH_SHORT).show();
+            Executors.newSingleThreadExecutor().execute(() -> {
+                try {
+                    AuthSession session = authRepository.getCurrentValidSession();
+                    if (session != null) {
+                        FuelogBackendApiClient apiClient = FuelogBackendApiClient.getInstance(authRepository);
+                        List<FuelogBackendApiClient.BackendVehicleItem> backendVehicles = apiClient.fetchMobileVehicles();
+                        if (backendVehicles != null && !backendVehicles.isEmpty()) {
+                            for (FuelogBackendApiClient.BackendVehicleItem bv : backendVehicles) {
+                                String vid = bv.vehicleId != null ? bv.vehicleId : bv.id;
+                                userCacheManager.setServerVehicleName(vid, bv.getDisplayName());
+                            }
+                            homeRepository.applyBackendUserVehicles(backendVehicles, userCacheManager::getEffectiveVehicleName);
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+                if (isAdded() && getActivity() != null) {
+                    requireActivity().runOnUiThread(() -> {
+                        List<VehicleProfile> refreshed = homeRepository.getVehicles();
+                        if (refreshed.isEmpty()) {
+                            registerVehicleLauncher.launch(new Intent(requireContext(), VehicleRegisterActivity.class));
+                        } else {
+                            String currentVid = homeRepository.getSelectedVehicle() != null
+                                    ? homeRepository.getSelectedVehicle().getVehicleId()
+                                    : "";
+                            VehicleSwitcherBottomSheetHelper.show(requireContext(), refreshed, currentVid, this::onVehicleSelected);
+                        }
+                    });
+                }
+            });
             return;
         }
 
-        List<String> optionList = new ArrayList<>();
         String currentVid = homeRepository.getSelectedVehicle() != null
                 ? homeRepository.getSelectedVehicle().getVehicleId()
                 : "";
 
-        for (VehicleProfile v : vehicles) {
-            boolean isCurrent = v.getVehicleId().equals(currentVid);
-            String prefix = isCurrent ? "✓ 🚗 " : "   🚗 ";
-            String roleTag = (v.getRole() != null && !v.getRole().isEmpty()) ? "[" + v.getRole() + "] " : "";
-            String pairedTag = v.isPaired() ? " (단말기 연결됨)" : "";
-            optionList.add(prefix + roleTag + v.getDisplayName() + pairedTag);
+        VehicleSwitcherBottomSheetHelper.show(requireContext(), vehicles, currentVid, this::onVehicleSelected);
+    }
+
+    private void onVehicleSelected(@NonNull VehicleProfile selected) {
+        homeRepository.setNewUserEmptyMode(false);
+        homeRepository.selectVehicle(selected.getVehicleId());
+
+        AuthSession session = authRepository.getCurrentValidSession();
+        if (session != null) {
+            String uid = session.getUserId();
+            userCacheManager.setRegisteredVehicleForUser(uid, selected.getDisplayName());
+            userCacheManager.setRegisteredVehicleUuid(uid, selected.getVehicleId());
+            if (selected.getInstallationId() != null) {
+                userCacheManager.setInstallationCredentials(
+                        uid,
+                        selected.getInstallationId(),
+                        userCacheManager.getInstallationSecret(uid)
+                );
+            }
         }
-        optionList.add("➕ 새 차량 추가 등록 / 연동 (M02)");
-        optionList.add("🚪 로그아웃 (다른 계정으로 전환)");
+        com.pleos.mobile_app_fuelog.data.connection.M04DriverConnectionCoordinator.getInstance()
+                .setVehicleAlias(selected.getDisplayName());
 
-        String[] options = optionList.toArray(new String[0]);
+        renderDashboard();
+        Snackbar.make(binding.getRoot(),
+                "'" + selected.getDisplayName() + "' 차량으로 전환되었습니다.",
+                Snackbar.LENGTH_SHORT).show();
 
-        new MaterialAlertDialogBuilder(requireContext())
-                .setTitle("차량 전환 (" + vehicles.size() + "대 등록됨)")
-                .setItems(options, (dialog, which) -> {
-                    if (which < vehicles.size()) {
-                        VehicleProfile selected = vehicles.get(which);
-                        homeRepository.setNewUserEmptyMode(false);
-                        homeRepository.selectVehicle(selected.getVehicleId());
-
-                        AuthSession session = authRepository.getCurrentValidSession();
-                        if (session != null) {
-                            String uid = session.getUserId();
-                            userCacheManager.setRegisteredVehicleForUser(uid, selected.getDisplayName());
-                            userCacheManager.setRegisteredVehicleUuid(uid, selected.getVehicleId());
-                            if (selected.getInstallationId() != null) {
-                                userCacheManager.setInstallationCredentials(
-                                        uid,
-                                        selected.getInstallationId(),
-                                        userCacheManager.getInstallationSecret(uid)
-                                );
-                            }
-                        }
-
-                        renderDashboard();
-                        Snackbar.make(binding.getRoot(),
-                                "'" + selected.getDisplayName() + "' 차량으로 전환되었습니다.",
-                                Snackbar.LENGTH_SHORT).show();
-
-                        // 차량 전환 시 해당 차량의 데이터로 재동기화
-                        syncInboxFromBackend();
-                    } else if (which == vehicles.size()) {
-                        registerVehicleLauncher.launch(new Intent(requireContext(), VehicleRegisterActivity.class));
-                    } else {
-                        authRepository.signOut();
-                        navigateBackToM01();
-                    }
-                })
-                .show();
+        // 차량 전환 시 해당 차량의 데이터로 재동기화
+        syncInboxFromBackend();
     }
 
     private void renderSyncStatusHeader() {
@@ -490,55 +358,10 @@ public class M03VehicleHomeFragment extends Fragment {
             binding.tvM03OdometerValue.setText("최신 거리 확인 필요");
         }
 
-        renderDotIndicators();
         renderMonthlyExpensesSection();
         renderPendingTasksSection();
         if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).updateMaintenanceBadge();
-        }
-    }
-
-    private void renderDotIndicators() {
-        List<VehicleProfile> vehicles = homeRepository.getVehicles();
-        int total = vehicles.size();
-        binding.containerM03DotsIndicator.removeAllViews();
-        if (total <= 1) {
-            binding.containerM03DotsIndicator.setVisibility(View.GONE);
-            return;
-        }
-        binding.containerM03DotsIndicator.setVisibility(View.VISIBLE);
-
-        VehicleProfile current = homeRepository.getSelectedVehicle();
-        int currentIndex = 0;
-        if (current != null) {
-            for (int i = 0; i < total; i++) {
-                if (vehicles.get(i).getVehicleId().equals(current.getVehicleId())) {
-                    currentIndex = i;
-                    break;
-                }
-            }
-        }
-
-        for (int i = 0; i < total; i++) {
-            final int index = i;
-            View dot = new View(requireContext());
-            int width = (i == currentIndex) ? dpToPx(18) : dpToPx(6);
-            int height = dpToPx(6);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(width, height);
-            lp.setMargins(dpToPx(3), 0, dpToPx(3), 0);
-            dot.setLayoutParams(lp);
-
-            GradientDrawable drawable = new GradientDrawable();
-            drawable.setShape(GradientDrawable.RECTANGLE);
-            drawable.setCornerRadius(dpToPx(3));
-            if (i == currentIndex) {
-                drawable.setColor(ContextCompat.getColor(requireContext(), R.color.fuelog_primary));
-            } else {
-                drawable.setColor(ContextCompat.getColor(requireContext(), R.color.fuelog_border));
-            }
-            dot.setBackground(drawable);
-            dot.setOnClickListener(v -> switchToVehicleByIndex(index));
-            binding.containerM03DotsIndicator.addView(dot);
+            ((MainActivity) getActivity()).updateBottomNavBadges();
         }
     }
 

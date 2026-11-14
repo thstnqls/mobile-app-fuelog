@@ -87,7 +87,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        updateMaintenanceBadge();
+        updateBottomNavBadges();
     }
     @Override protected void onStop() {
         connectionVisible = false;
@@ -148,7 +148,7 @@ public class MainActivity extends AppCompatActivity {
                 } else if (destId == R.id.nav_manage_settings) {
                     menu.findItem(R.id.bottom_tab_manage).setChecked(true);
                 }
-                updateMaintenanceBadge();
+                updateBottomNavBadges();
             }
         });
 
@@ -211,6 +211,24 @@ public class MainActivity extends AppCompatActivity {
         } else {
             binding.bottomNavMain.removeBadge(R.id.bottom_tab_maintenance);
         }
+    }
+
+    public void updateLedgerBadge() {
+        M03HomeRepository homeRepo = M03HomeRepository.getInstance();
+        int pendingFuelCount = homeRepo.getPendingFuelConfirmCountForSelectedVehicle();
+        if (pendingFuelCount > 0) {
+            BadgeDrawable badge = binding.bottomNavMain.getOrCreateBadge(R.id.bottom_tab_ledger);
+            badge.setVisible(true);
+            badge.setNumber(pendingFuelCount);
+            badge.setBackgroundColor(ContextCompat.getColor(this, R.color.fuelog_input_error_text));
+        } else {
+            binding.bottomNavMain.removeBadge(R.id.bottom_tab_ledger);
+        }
+    }
+
+    public void updateBottomNavBadges() {
+        updateMaintenanceBadge();
+        updateLedgerBadge();
     }
 
     @Override

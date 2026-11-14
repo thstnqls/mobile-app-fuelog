@@ -2,6 +2,8 @@ package com.pleos.mobile_app_fuelog.ui.maintenance;
 
 import android.content.res.ColorStateList;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,6 +17,7 @@ import androidx.navigation.fragment.NavHostFragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.pleos.mobile_app_fuelog.MainActivity;
 import com.pleos.mobile_app_fuelog.R;
 import com.pleos.mobile_app_fuelog.data.auth.AuthRepository;
 import com.pleos.mobile_app_fuelog.data.auth.AuthSession;
@@ -23,6 +26,7 @@ import com.pleos.mobile_app_fuelog.data.home.ExpenseRecord;
 import com.pleos.mobile_app_fuelog.data.home.M03HomeRepository;
 import com.pleos.mobile_app_fuelog.data.home.VehicleProfile;
 import com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient;
+import com.pleos.mobile_app_fuelog.ui.vehicle.VehicleSwitcherBottomSheetHelper;
 import com.pleos.mobile_app_fuelog.databinding.DialogCompleteMaintenanceBinding;
 import com.pleos.mobile_app_fuelog.databinding.DialogEditMaintenanceCycleBinding;
 import com.pleos.mobile_app_fuelog.databinding.FragmentM12MaintenanceScheduleBinding;
@@ -50,6 +54,16 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
     private String activeVehicleId;
     private double currentOdometerKm = 0.0;
 
+    private static final long POLLING_INTERVAL_MS = 10_000L;
+    private final Handler pollHandler = new Handler(Looper.getMainLooper());
+    private final Runnable pollRunnable = new Runnable() {
+        @Override
+        public void run() {
+            pollPlansSilently();
+            pollHandler.postDelayed(this, POLLING_INTERVAL_MS);
+        }
+    };
+
     @Override
     public View onCreateView(
             @NonNull LayoutInflater inflater,
@@ -69,11 +83,53 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
         homeRepository = M03HomeRepository.getInstance();
         apiClient = FuelogBackendApiClient.getInstance(authRepository);
 
+        preloadVehiclesIfEmpty();
+
         setupVehicleInfo();
         setupRecyclerView();
         setupActions();
 
         loadPlansFromBackend();
+    }
+
+    private void preloadVehiclesIfEmpty() {
+        if (!homeRepository.getVehicles().isEmpty()) {
+            return;
+        }
+        Executors.newSingleThreadExecutor().execute(() -> {
+            List<FuelogBackendApiClient.BackendVehicleItem> backendVehicles = apiClient.fetchMobileVehicles();
+            if (!backendVehicles.isEmpty()) {
+                for (FuelogBackendApiClient.BackendVehicleItem bv : backendVehicles) {
+                    String vid = bv.vehicleId != null ? bv.vehicleId : bv.id;
+                    userCacheManager.setServerVehicleName(vid, bv.getDisplayName());
+                }
+                homeRepository.applyBackendUserVehicles(backendVehicles, userCacheManager::getEffectiveVehicleName);
+                if (isAdded() && getActivity() != null) {
+                    requireActivity().runOnUiThread(this::setupVehicleInfo);
+                }
+            }
+        });
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        setupVehicleInfo();
+        pollHandler.removeCallbacks(pollRunnable);
+        pollHandler.postDelayed(pollRunnable, POLLING_INTERVAL_MS);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        pollHandler.removeCallbacks(pollRunnable);
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        pollHandler.removeCallbacks(pollRunnable);
+        binding = null;
     }
 
     private void setupVehicleInfo() {
@@ -92,12 +148,18 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
         }
 
         currentOdometerKm = homeRepository.getLatestOdometerKm();
-        String name = profile != null ? profile.getDisplayName() : "내 차량";
-        if (currentOdometerKm > 0) {
-            binding.tvM12VehicleSubtitle.setText(String.format(Locale.KOREA, "%s · 누적 %,d km", name, Math.round(currentOdometerKm)));
-        } else {
-            binding.tvM12VehicleSubtitle.setText(name);
+        String name = profile != null ? profile.getDisplayName() : null;
+        if ((name == null || name.trim().isEmpty()) && activeVehicleId != null) {
+            name = userCacheManager.getEffectiveVehicleName(activeVehicleId);
         }
+        if (name == null || name.trim().isEmpty()) {
+            name = userCacheManager.getVisibleCachedVehicleName();
+        }
+        if (name == null || name.trim().isEmpty()) {
+            name = "내 차량";
+        }
+        binding.tvM12VehicleSubtitle.setText(name);
+        updateOdometerDisplay();
     }
 
     private void setupRecyclerView() {
@@ -111,9 +173,64 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
                 NavHostFragment.findNavController(this).popBackStack()
         );
 
-        binding.btnM12Refresh.setOnClickListener(v -> loadPlansFromBackend());
+        binding.btnM12ChangeVehicle.setOnClickListener(v -> showVehicleSwitcherDialog());
+        binding.btnM12VehicleChip.setOnClickListener(v -> showVehicleSwitcherDialog());
+        binding.btnM12SwitchVehicle.setOnClickListener(v -> showVehicleSwitcherDialog());
 
         binding.btnM12AddPlan.setOnClickListener(v -> showAddPlanDialog());
+    }
+
+    private void showVehicleSwitcherDialog() {
+        List<VehicleProfile> vehicles = homeRepository.getVehicles();
+        if (vehicles.isEmpty()) {
+            Toast.makeText(requireContext(), "차량 목록을 불러오는 중입니다...", Toast.LENGTH_SHORT).show();
+            Executors.newSingleThreadExecutor().execute(() -> {
+                List<FuelogBackendApiClient.BackendVehicleItem> backendVehicles = apiClient.fetchMobileVehicles();
+                if (!backendVehicles.isEmpty()) {
+                    for (FuelogBackendApiClient.BackendVehicleItem bv : backendVehicles) {
+                        String vid = bv.vehicleId != null ? bv.vehicleId : bv.id;
+                        userCacheManager.setServerVehicleName(vid, bv.getDisplayName());
+                    }
+                    homeRepository.applyBackendUserVehicles(backendVehicles, userCacheManager::getEffectiveVehicleName);
+                }
+                if (isAdded() && getActivity() != null) {
+                    requireActivity().runOnUiThread(() -> {
+                        List<VehicleProfile> refreshed = homeRepository.getVehicles();
+                        String currentVid = activeVehicleId != null ? activeVehicleId : "";
+                        VehicleSwitcherBottomSheetHelper.show(requireContext(), refreshed, currentVid, this::onVehicleSelected);
+                    });
+                }
+            });
+            return;
+        }
+
+        String currentVid = activeVehicleId != null ? activeVehicleId : "";
+        VehicleSwitcherBottomSheetHelper.show(requireContext(), vehicles, currentVid, this::onVehicleSelected);
+    }
+
+    private void onVehicleSelected(@NonNull VehicleProfile selected) {
+        homeRepository.selectVehicle(selected.getVehicleId());
+        activeVehicleId = selected.getVehicleId();
+
+        AuthSession session = authRepository.getCurrentValidSession();
+        if (session != null) {
+            String uid = session.getUserId();
+            userCacheManager.setRegisteredVehicleForUser(uid, selected.getDisplayName());
+            userCacheManager.setRegisteredVehicleUuid(uid, selected.getVehicleId());
+            if (selected.getInstallationId() != null) {
+                userCacheManager.setInstallationCredentials(
+                        uid,
+                        selected.getInstallationId(),
+                        userCacheManager.getInstallationSecret(uid)
+                );
+            }
+        }
+        com.pleos.mobile_app_fuelog.data.connection.M04DriverConnectionCoordinator.getInstance()
+                .setVehicleAlias(selected.getDisplayName());
+
+        setupVehicleInfo();
+        loadPlansFromBackend();
+        Toast.makeText(requireContext(), "소모품 관리 차량이 변경되었습니다: " + selected.getDisplayName(), Toast.LENGTH_SHORT).show();
     }
 
     private void loadPlansFromBackend() {
@@ -149,8 +266,12 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
 
                     // 홈 레포지토리 캐시에도 동기화
                     homeRepository.applyBackendMaintenancePlans(activeVehicleId, activePlans);
+                    if (getActivity() instanceof MainActivity) {
+                        ((MainActivity) getActivity()).updateBottomNavBadges();
+                    }
 
                     adapter.updateData(activePlans, currentOdometerKm > 0 ? currentOdometerKm : null);
+                    updateOdometerDisplay();
 
                     // 요약 배너 업데이트
                     updateSummaryBanner(activePlans.size(), overdueCount);
@@ -165,6 +286,55 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
                 });
             }
         });
+    }
+
+    /**
+     * 주기적으로 백그라운드에서 소모품 계획 목록을 조회하여 로딩 스피너 깜빡임 없이 최신 상태를 갱신한다.
+     */
+    private void pollPlansSilently() {
+        if (activeVehicleId == null) return;
+        Executors.newSingleThreadExecutor().execute(() -> {
+            List<FuelogBackendApiClient.MaintenancePlanItem> plans =
+                    apiClient.fetchMaintenancePlans(activeVehicleId);
+
+            currentOdometerKm = homeRepository.getLatestOdometerKm();
+
+            if (isAdded() && getActivity() != null) {
+                requireActivity().runOnUiThread(() -> {
+                    if (binding == null) return;
+                    List<FuelogBackendApiClient.MaintenancePlanItem> activePlans = new ArrayList<>();
+                    int overdueCount = 0;
+                    for (FuelogBackendApiClient.MaintenancePlanItem p : plans) {
+                        if (p.active) {
+                            activePlans.add(p);
+                            if ("DANGER".equalsIgnoreCase(p.riskLevel) || "OVERDUE".equalsIgnoreCase(p.riskLevel)) {
+                                overdueCount++;
+                            }
+                        }
+                    }
+                    homeRepository.applyBackendMaintenancePlans(activeVehicleId, activePlans);
+                    adapter.updateData(activePlans, currentOdometerKm > 0 ? currentOdometerKm : null);
+                    updateOdometerDisplay();
+                    updateSummaryBanner(activePlans.size(), overdueCount);
+                    if (activePlans.isEmpty()) {
+                        binding.layoutM12Empty.setVisibility(View.VISIBLE);
+                        binding.recyclerM12Plans.setVisibility(View.GONE);
+                    } else {
+                        binding.layoutM12Empty.setVisibility(View.GONE);
+                        binding.recyclerM12Plans.setVisibility(View.VISIBLE);
+                    }
+                });
+            }
+        });
+    }
+
+    private void updateOdometerDisplay() {
+        if (binding == null) return;
+        if (currentOdometerKm > 0) {
+            binding.tvM12OdometerValue.setText(String.format(Locale.KOREA, "%,d km", Math.round(currentOdometerKm)));
+        } else {
+            binding.tvM12OdometerValue.setText("0 km");
+        }
     }
 
     private void updateSummaryBanner(int totalCount, int overdueCount) {
@@ -440,11 +610,5 @@ public class M12MaintenanceScheduleFragment extends Fragment implements Maintena
                     });
                 })
                 .show();
-    }
-
-    @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        binding = null;
     }
 }

@@ -45,27 +45,37 @@
                         android:id="@+id/btn_change_vehicle_m05"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
+                        android:layout_marginTop="5dp"
+                        android:background="@drawable/bg_vehicle_chip"
+                        android:clickable="true"
+                        android:focusable="true"
                         android:gravity="center_vertical"
-                        android:background="?attr/selectableItemBackground"
-                        android:paddingVertical="2dp"
-                        android:orientation="horizontal">
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="4dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="🚗 "
+                            android:textSize="12sp" />
 
                         <TextView
                             android:id="@+id/text_selected_vehicle_label"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:textSize="13sp"
-                            android:textColor="@color/fuelog_text_secondary"
-                            android:text="플레오스 연동 차량" />
+                            android:text="플레오스 연동 차량"
+                            android:textColor="@color/fuelog_primary"
+                            android:textSize="12.5sp"
+                            android:textStyle="bold" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="4dp"
-                            android:textSize="10sp"
-                            android:textColor="@color/fuelog_text_secondary"
-                            android:text="▼" />
+                            android:text="▼"
+                            android:textColor="@color/fuelog_primary"
+                            android:textSize="9sp" />
 
                     </LinearLayout>
 

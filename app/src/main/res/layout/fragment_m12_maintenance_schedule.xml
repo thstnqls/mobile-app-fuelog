@@ -16,61 +16,105 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp"
-        android:paddingTop="14dp"
-        android:paddingBottom="14dp">
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp">
 
         <ImageButton
             android:id="@+id/btn_m12_back"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="뒤로가기"
             android:src="@drawable/ic_arrow_back" />
 
         <LinearLayout
+            android:id="@+id/btn_m12_change_vehicle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
+            android:background="?attr/selectableItemBackground"
             android:orientation="vertical">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="정비 예정 및 주기 설정"
+                android:text="소모품 관리"
                 android:textColor="@color/fuelog_text_primary"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/tv_m12_vehicle_subtitle"
+            <LinearLayout
+                android:id="@+id/btn_m12_vehicle_chip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="차량 로딩 중..."
-                android:textColor="@color/fuelog_text_secondary"
-                android:textSize="12.5sp" />
+                android:layout_marginTop="3dp"
+                android:background="@drawable/bg_vehicle_chip"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🚗 "
+                    android:textSize="11.5sp" />
+
+                <TextView
+                    android:id="@+id/tv_m12_vehicle_subtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="차량 로딩 중..."
+                    android:textColor="@color/fuelog_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="▼"
+                    android:textColor="@color/fuelog_primary"
+                    android:textSize="9sp" />
+            </LinearLayout>
         </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/btn_m12_refresh"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_m12_switch_vehicle"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
             android:layout_marginEnd="6dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="새로고침"
-            android:src="@android:drawable/ic_popup_sync" />
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="11dp"
+            android:paddingVertical="0dp"
+            android:text="차량 변경"
+            android:textColor="@color/fuelog_text_primary"
+            android:textSize="11.5sp"
+            app:cornerRadius="18dp"
+            app:strokeColor="@color/fuelog_border"
+            app:strokeWidth="1dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_m12_add_plan"
             android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            android:layout_height="36dp"
             android:backgroundTint="@color/fuelog_primary"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="11dp"
+            android:paddingVertical="0dp"
             android:text="+ 소모품 추가"
             android:textColor="@color/white"
-            android:textSize="12sp"
+            android:textSize="11.5sp"
             android:textStyle="bold"
-            app:cornerRadius="10dp" />
+            app:cornerRadius="18dp" />
     </LinearLayout>
 
     <!-- 2. 상단 상태 요약 배너 -->
@@ -92,12 +136,12 @@
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="16dp"
-            android:paddingVertical="12dp">
+            android:paddingVertical="13dp">
 
             <TextView
                 android:id="@+id/tv_m12_summary_icon"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:background="@drawable/bg_badge_rounded"
                 android:gravity="center"
                 android:text="🔧"
@@ -107,6 +151,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
+                android:layout_marginEnd="8dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
@@ -127,6 +172,37 @@
                     android:text="전체 0개 소모품 항목 등록됨"
                     android:textColor="@color/fuelog_text_secondary"
                     android:textSize="12sp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="32dp"
+                android:layout_marginEnd="12dp"
+                android:background="@color/fuelog_border" />
+
+            <LinearLayout
+                android:id="@+id/layout_m12_odometer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="누적 주행거리"
+                    android:textColor="@color/fuelog_text_secondary"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/tv_m12_odometer_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="0 km"
+                    android:textColor="@color/fuelog_primary"
+                    android:textSize="14.5sp"
+                    android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>

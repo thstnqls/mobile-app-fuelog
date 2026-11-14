@@ -491,6 +491,15 @@ public final class M03HomeRepository {
         }
     }
 
+    public synchronized void resolveFuelPendingTask(@NonNull String vehicleId) {
+        for (int i = allPendingTasks.size() - 1; i >= 0; i--) {
+            PendingTaskItem item = allPendingTasks.get(i);
+            if (vehicleId.equals(item.getVehicleId()) && item.getDestination() == PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM) {
+                allPendingTasks.remove(i);
+            }
+        }
+    }
+
     private final Map<String, List<com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient.MaintenanceEventItem>> vehicleMaintenanceEventsMap = new HashMap<>();
 
     /**
@@ -729,6 +738,33 @@ public final class M03HomeRepository {
             }
         }
         return result;
+    }
+
+    public synchronized int getPendingFuelConfirmCountForSelectedVehicle() {
+        VehicleProfile current = getSelectedVehicle();
+        if (current == null) {
+            return 0;
+        }
+        String vid = current.getVehicleId();
+        int count = 0;
+        for (PendingTaskItem task : allPendingTasks) {
+            if (vid.equals(task.getVehicleId()) && task.getDestination() == PendingTaskItem.TaskDestination.M07_FUEL_CONFIRM) {
+                int taskCount = 1;
+                String title = task.getTitle();
+                if (title != null && title.contains("건)")) {
+                    try {
+                        int start = title.lastIndexOf('(');
+                        int end = title.lastIndexOf("건)");
+                        if (start >= 0 && end > start) {
+                            taskCount = Integer.parseInt(title.substring(start + 1, end).trim());
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+                count += taskCount;
+            }
+        }
+        return count;
     }
 
     /**

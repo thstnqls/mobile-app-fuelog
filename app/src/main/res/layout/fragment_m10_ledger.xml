@@ -28,9 +28,11 @@
                 android:paddingBottom="12dp">
 
                 <LinearLayout
+                    android:id="@+id/btn_change_vehicle_m10"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
                     android:orientation="vertical">
 
                     <TextView
@@ -41,28 +43,79 @@
                         android:textColor="@color/fuelog_text_primary"
                         android:text="차계부" />
 
-                    <TextView
-                        android:id="@+id/text_ledger_vehicle_name"
+                    <LinearLayout
+                        android:id="@+id/btn_m10_vehicle_chip"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:textSize="13sp"
-                        android:textColor="@color/fuelog_text_secondary"
-                        android:text="플레오스 연동 차량" />
+                        android:layout_marginTop="4dp"
+                        android:background="@drawable/bg_vehicle_chip"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="9dp"
+                        android:paddingVertical="3dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="🚗 "
+                            android:textSize="11.5sp" />
+
+                        <TextView
+                            android:id="@+id/text_ledger_vehicle_name"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="플레오스 연동 차량"
+                            android:textColor="@color/fuelog_primary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:text="▼"
+                            android:textColor="@color/fuelog_primary"
+                            android:textSize="9sp" />
+                    </LinearLayout>
 
                 </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_m10_switch_vehicle"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:layout_marginEnd="6dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="11dp"
+                    android:paddingVertical="0dp"
+                    android:text="차량 변경"
+                    android:textColor="@color/fuelog_text_primary"
+                    android:textSize="11.5sp"
+                    app:cornerRadius="18dp"
+                    app:strokeColor="@color/fuelog_border"
+                    app:strokeWidth="1dp" />
 
                 <!-- [+ 지출 등록] 상단 빠른 버튼 -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_quick_add_expense"
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
+                    android:layout_height="36dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="11dp"
+                    android:paddingVertical="0dp"
                     android:text="+ 주유·지출"
-                    android:textColor="#0D1824"
-                    android:textSize="13sp"
+                    android:textColor="@color/white"
+                    android:textSize="11.5sp"
                     android:textStyle="bold"
                     app:backgroundTint="@color/fuelog_primary"
-                    app:cornerRadius="10dp" />
+                    app:cornerRadius="18dp" />
 
             </LinearLayout>
 

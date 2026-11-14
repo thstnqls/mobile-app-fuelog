@@ -13,6 +13,7 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.fragment.NavHostFragment;
 
 import com.google.android.material.snackbar.Snackbar;
+import com.pleos.mobile_app_fuelog.MainActivity;
 import com.pleos.mobile_app_fuelog.R;
 import com.pleos.mobile_app_fuelog.data.auth.AuthRepository;
 import com.pleos.mobile_app_fuelog.data.cache.UserCacheManager;
@@ -251,6 +252,10 @@ public class M07FuelConfirmFragment extends Fragment {
                 amount
         );
         homeRepository.addExpenseRecord(newRecord);
+        homeRepository.resolveFuelPendingTask(vehicleId);
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).updateBottomNavBadges();
+        }
 
         Snackbar.make(binding.getRoot(),
                 String.format(Locale.KOREA, "주유 지출(%,d원)이 차계부에 저장되었습니다.", amount),
@@ -275,6 +280,14 @@ public class M07FuelConfirmFragment extends Fragment {
                         null
                 );
             });
+        }
+
+        String vehicleId = homeRepository.getSelectedVehicle() != null
+                ? homeRepository.getSelectedVehicle().getVehicleId()
+                : "primary_veh";
+        homeRepository.resolveFuelPendingTask(vehicleId);
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).updateBottomNavBadges();
         }
 
         Snackbar.make(binding.getRoot(), "주유 후보를 기각 처리했습니다.", Snackbar.LENGTH_SHORT).show();
