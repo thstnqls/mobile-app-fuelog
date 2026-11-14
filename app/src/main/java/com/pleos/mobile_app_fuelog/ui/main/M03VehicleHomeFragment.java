@@ -27,6 +27,7 @@ import androidx.navigation.fragment.NavHostFragment;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.snackbar.Snackbar;
+import com.pleos.mobile_app_fuelog.MainActivity;
 import com.pleos.mobile_app_fuelog.R;
 import com.pleos.mobile_app_fuelog.core.permission.OptionalPermissionType;
 import com.pleos.mobile_app_fuelog.core.permission.PermissionGuideHelper;
@@ -362,10 +363,6 @@ public class M03VehicleHomeFragment extends Fragment {
         binding.btnM03AddExpense.setOnClickListener(v ->
                 NavHostFragment.findNavController(this).navigate(R.id.nav_m07_fuel_confirm)
         );
-
-        binding.cardM03Maintenance.setOnClickListener(v ->
-                NavHostFragment.findNavController(this).navigate(R.id.nav_m12_maintenance_schedules)
-        );
     }
 
     private void showVehicleSwitcherDialog() {
@@ -459,7 +456,6 @@ public class M03VehicleHomeFragment extends Fragment {
 
         // 차량 전환 시 이전 차량 데이터가 남아 섞이지 않도록 모든 컨테이너 초기화
         binding.containerPendingTasks.removeAllViews();
-        binding.containerMaintenanceSchedule.removeAllViews();
 
         VehicleProfile selectedVehicle = homeRepository.getSelectedVehicle();
         if (selectedVehicle == null || homeRepository.isNewUserEmptyMode()) {
@@ -490,7 +486,9 @@ public class M03VehicleHomeFragment extends Fragment {
         renderDotIndicators();
         renderMonthlyExpensesSection();
         renderPendingTasksSection();
-        renderMaintenanceSection();
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).updateMaintenanceBadge();
+        }
     }
 
     private void renderDotIndicators() {
@@ -651,110 +649,6 @@ public class M03VehicleHomeFragment extends Fragment {
 
         long manWon = Math.round(summary.getConfirmedTotalWon() / 10000.0);
         binding.tvM03ChartCurrentLabel.setText(manWon + "만");
-
-        // 이번달 확정 차계부 지출 내역 목록 표시
-        binding.containerConfirmedExpenses.removeAllViews();
-        List<ExpenseRecord> confirmedList = homeRepository.getConfirmedExpensesForSelectedVehicle();
-        for (ExpenseRecord record : confirmedList) {
-            String tag = record.getOwnership() == ExpenseRecord.Ownership.EXPLICITLY_SHARED ? "공동" : "개인";
-            LinearLayout row = new LinearLayout(requireContext());
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(0, dpToPx(8), 0, dpToPx(8));
-
-            TextView left = new TextView(requireContext());
-            left.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            left.setText(record.getDateLabel() + " · [" + tag + "] " + record.getTitle());
-            left.setTextSize(13f);
-            left.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_secondary));
-
-            TextView right = new TextView(requireContext());
-            right.setText(formatWon(record.getAmountWon()));
-            right.setTextSize(13f);
-            right.setTypeface(null, Typeface.BOLD);
-            right.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_primary));
-
-            row.addView(left);
-            row.addView(right);
-            binding.containerConfirmedExpenses.addView(row);
-        }
-    }
-
-    /**
-     * 3. 소모품 관리 / 정비 예정 (차봇 우측 폰 스타일 수평 게이지 바)
-     */
-    private void renderMaintenanceSection() {
-        List<MaintenanceScheduleItem> items = homeRepository.getMaintenanceSchedulesForSelectedVehicle();
-        binding.tvM03MaintenanceHeaderCount.setText("소모품 관리 " + items.size());
-
-        if (items.isEmpty()) {
-            binding.containerMaintenanceSchedule.addView(createEmptyRowText("예정된 정비 항목이 없습니다."));
-            return;
-        }
-
-        for (int i = 0; i < items.size(); i++) {
-            MaintenanceScheduleItem item = items.get(i);
-
-            LinearLayout row = new LinearLayout(requireContext());
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(0, dpToPx(10), 0, dpToPx(10));
-
-            // 좌측: 소모품명 + 상세
-            LinearLayout leftCol = new LinearLayout(requireContext());
-            leftCol.setOrientation(LinearLayout.VERTICAL);
-            leftCol.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.1f));
-
-            TextView title = new TextView(requireContext());
-            title.setText(item.getItemTitle());
-            title.setTextSize(14f);
-            title.setTypeface(null, Typeface.BOLD);
-            title.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_primary));
-
-            TextView detail = new TextView(requireContext());
-            detail.setText(item.getDueDetail());
-            detail.setTextSize(11.5f);
-            detail.setTextColor(ContextCompat.getColor(requireContext(), R.color.fuelog_text_secondary));
-
-            leftCol.addView(title);
-            leftCol.addView(detail);
-
-            // 우측: 게이지 바 + 남은 거리/일자
-            LinearLayout rightCol = new LinearLayout(requireContext());
-            rightCol.setOrientation(LinearLayout.VERTICAL);
-            rightCol.setGravity(Gravity.END);
-            rightCol.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.9f));
-
-            ProgressBar bar = new ProgressBar(requireContext(), null, android.R.attr.progressBarStyleHorizontal);
-            LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(dpToPx(110), dpToPx(8));
-            bar.setLayoutParams(barParams);
-            bar.setMax(100);
-            bar.setProgress(item.isUrgent() ? 88 : 55);
-            int barColor = ContextCompat.getColor(
-                    requireContext(),
-                    item.isUrgent() ? R.color.fuelog_server_error_border : R.color.fuelog_primary
-            );
-            bar.setProgressTintList(ColorStateList.valueOf(barColor));
-
-            TextView badge = new TextView(requireContext());
-            badge.setText(item.getRemainingBadge());
-            badge.setTextSize(11.5f);
-            badge.setTextColor(ContextCompat.getColor(
-                    requireContext(),
-                    item.isUrgent() ? R.color.fuelog_server_error_text : R.color.fuelog_text_secondary
-            ));
-
-            rightCol.addView(bar);
-            rightCol.addView(badge);
-
-            row.addView(leftCol);
-            row.addView(rightCol);
-            binding.containerMaintenanceSchedule.addView(row);
-
-            if (i < items.size() - 1) {
-                binding.containerMaintenanceSchedule.addView(createDivider());
-            }
-        }
     }
 
     private View createDivider() {

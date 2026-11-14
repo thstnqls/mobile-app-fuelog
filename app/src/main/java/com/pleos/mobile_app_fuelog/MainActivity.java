@@ -6,12 +6,14 @@ import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.NavController;
 import androidx.navigation.NavGraph;
 import androidx.navigation.NavOptions;
 import androidx.navigation.fragment.NavHostFragment;
 
+import com.google.android.material.badge.BadgeDrawable;
 import com.google.android.material.snackbar.Snackbar;
 import com.pleos.mobile_app_fuelog.core.navigation.DeepLinkRouter;
 import com.pleos.mobile_app_fuelog.core.permission.PermissionGuideHelper;
@@ -19,8 +21,12 @@ import com.pleos.mobile_app_fuelog.databinding.ActivityMainBinding;
 import com.pleos.mobile_app_fuelog.data.auth.AuthRepository;
 import com.pleos.mobile_app_fuelog.data.auth.AuthSession;
 import com.pleos.mobile_app_fuelog.data.cache.UserCacheManager;
+import com.pleos.mobile_app_fuelog.data.home.M03HomeRepository;
+import com.pleos.mobile_app_fuelog.data.home.MaintenanceScheduleItem;
 import com.pleos.mobile_app_fuelog.ui.auth.M01LoginFragment;
 import com.pleos.mobile_app_fuelog.ui.auth.M01LoginViewModel;
+
+import java.util.List;
 
 /**
  * 메인 액티비티.
@@ -78,6 +84,11 @@ public class MainActivity extends AppCompatActivity {
         connectionVisible = true;
         connectionHandler.post(connectionCheck);
     }
+    @Override
+    protected void onResume() {
+        super.onResume();
+        updateMaintenanceBadge();
+    }
     @Override protected void onStop() {
         connectionVisible = false;
         connectionHandler.removeCallbacks(connectionCheck);
@@ -125,6 +136,19 @@ public class MainActivity extends AppCompatActivity {
                 binding.bottomNavMain.setVisibility(View.GONE);
             } else {
                 binding.bottomNavMain.setVisibility(View.VISIBLE);
+                android.view.Menu menu = binding.bottomNavMain.getMenu();
+                if (destId == R.id.nav_m03_vehicle_home) {
+                    menu.findItem(R.id.bottom_tab_home).setChecked(true);
+                } else if (destId == R.id.nav_m05_trip_calendar) {
+                    menu.findItem(R.id.bottom_tab_driving).setChecked(true);
+                } else if (destId == R.id.nav_m12_maintenance_schedules) {
+                    menu.findItem(R.id.bottom_tab_maintenance).setChecked(true);
+                } else if (destId == R.id.nav_m10_ledger) {
+                    menu.findItem(R.id.bottom_tab_ledger).setChecked(true);
+                } else if (destId == R.id.nav_manage_settings) {
+                    menu.findItem(R.id.bottom_tab_manage).setChecked(true);
+                }
+                updateMaintenanceBadge();
             }
         });
 
@@ -147,6 +171,12 @@ public class MainActivity extends AppCompatActivity {
                     navController.navigate(R.id.nav_m05_trip_calendar);
                 }
                 return true;
+            } else if (itemId == R.id.bottom_tab_maintenance) {
+                if (navController.getCurrentDestination() != null
+                        && navController.getCurrentDestination().getId() != R.id.nav_m12_maintenance_schedules) {
+                    navController.navigate(R.id.nav_m12_maintenance_schedules);
+                }
+                return true;
             } else if (itemId == R.id.bottom_tab_ledger) {
                 if (navController.getCurrentDestination() != null
                         && navController.getCurrentDestination().getId() != R.id.nav_m10_ledger) {
@@ -162,6 +192,25 @@ public class MainActivity extends AppCompatActivity {
             }
             return false;
         });
+    }
+
+    public void updateMaintenanceBadge() {
+        M03HomeRepository homeRepo = M03HomeRepository.getInstance();
+        List<MaintenanceScheduleItem> items = homeRepo.getMaintenanceSchedulesForSelectedVehicle();
+        int overdueCount = 0;
+        for (MaintenanceScheduleItem item : items) {
+            if (item.isUrgent()) {
+                overdueCount++;
+            }
+        }
+        if (overdueCount > 0) {
+            BadgeDrawable badge = binding.bottomNavMain.getOrCreateBadge(R.id.bottom_tab_maintenance);
+            badge.setVisible(true);
+            badge.setNumber(overdueCount);
+            badge.setBackgroundColor(ContextCompat.getColor(this, R.color.fuelog_input_error_text));
+        } else {
+            binding.bottomNavMain.removeBadge(R.id.bottom_tab_maintenance);
+        }
     }
 
     @Override
