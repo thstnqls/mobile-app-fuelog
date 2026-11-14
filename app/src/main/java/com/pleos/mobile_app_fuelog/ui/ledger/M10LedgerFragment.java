@@ -353,6 +353,11 @@ public class M10LedgerFragment extends Fragment {
                 }
                 args.putString(M11MaintenanceEventFragment.ARG_ITEM_NAME, record.getTitle());
                 NavHostFragment.findNavController(this).navigate(R.id.nav_m11_maintenance_event, args);
+            } else if (record.getCategory() == ExpenseRecord.Category.FUEL) {
+                Bundle args = new Bundle();
+                args.putString(M07FuelConfirmFragment.ARG_MODE, M07FuelConfirmFragment.MODE_EDIT);
+                args.putString(M07FuelConfirmFragment.ARG_RECORD_ID, record.getRecordId());
+                NavHostFragment.findNavController(this).navigate(R.id.nav_m07_fuel_confirm, args);
             } else {
                 Snackbar.make(binding.getRoot(),
                         record.getTitle() + " (" + NumberFormat.getNumberInstance(Locale.KOREA).format(record.getAmountWon()) + "원)",

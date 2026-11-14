@@ -12,6 +12,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.fragment.NavHostFragment;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.snackbar.Snackbar;
 import com.pleos.mobile_app_fuelog.MainActivity;
 import com.pleos.mobile_app_fuelog.R;
@@ -44,6 +45,11 @@ public class M07FuelConfirmFragment extends Fragment {
     public static final String ARG_CANDIDATE_ID = "arg_candidate_id";
     public static final String ARG_INITIAL_AMOUNT = "arg_initial_amount";
     public static final String ARG_INITIAL_LITERS = "arg_initial_liters";
+    public static final String ARG_MODE = "arg_mode";
+    public static final String MODE_CONFIRM = "CONFIRM";
+    public static final String MODE_CREATE = "CREATE";
+    public static final String MODE_EDIT = "EDIT";
+    public static final String ARG_RECORD_ID = "arg_record_id";
 
     private FragmentM07FuelConfirmBinding binding;
     private AuthRepository authRepository;
@@ -54,6 +60,11 @@ public class M07FuelConfirmFragment extends Fragment {
     @Nullable
     private String candidateId;
     private long candidateRevision = 1L;
+    private String mode = MODE_CREATE;
+    @Nullable
+    private String recordId;
+    @Nullable
+    private ExpenseRecord existingRecord;
 
     @Nullable
     @Override
@@ -73,12 +84,21 @@ public class M07FuelConfirmFragment extends Fragment {
 
         if (getArguments() != null) {
             candidateId = getArguments().getString(ARG_CANDIDATE_ID);
+            mode = getArguments().getString(ARG_MODE, candidateId != null ? MODE_CONFIRM : MODE_CREATE);
+            recordId = getArguments().getString(ARG_RECORD_ID);
         }
 
         setupViews();
         setupInputWatchers();
 
-        if (candidateId != null && !candidateId.isEmpty()) {
+        if (MODE_EDIT.equals(mode) && recordId != null) {
+            existingRecord = homeRepository.getExpenseRecordById(recordId);
+            if (existingRecord != null) {
+                setupEditMode(existingRecord);
+            } else {
+                setupManualModeDefaults();
+            }
+        } else if (candidateId != null && !candidateId.isEmpty()) {
             loadCandidateDetails(candidateId);
         } else {
             setupManualModeDefaults();
@@ -111,9 +131,57 @@ public class M07FuelConfirmFragment extends Fragment {
         binding.btnRejectFuel.setVisibility(View.GONE);
         binding.btnSaveFuelRecord.setText("지출 저장");
 
+        SimpleDateFormat sdf = new SimpleDateFormat("MM월 dd일", Locale.KOREA);
+        binding.etFuelDate.setText(sdf.format(new Date()));
         binding.etActualAmount.setText("50,000");
         binding.etActualLiters.setText("29.4");
         binding.etUnitPrice.setText("1,700");
+    }
+
+    private void setupEditMode(@NonNull ExpenseRecord record) {
+        binding.textScreenTitle.setText("주유 기록 수정");
+        binding.cardAutoDetectedFuel.setVisibility(View.GONE);
+        binding.btnRejectFuel.setVisibility(View.VISIBLE);
+        binding.btnRejectFuel.setText("주유 내역 삭제");
+        binding.btnSaveFuelRecord.setText("수정 내용 저장");
+
+        String dateDetail = record.getDateLabel();
+        String dateOnly = dateDetail != null ? dateDetail : "";
+        int dotIdx = dateOnly.indexOf('·');
+        if (dotIdx > 0) {
+            dateOnly = dateOnly.substring(0, dotIdx).trim();
+        }
+        if (dateOnly.isEmpty()) {
+            SimpleDateFormat sdf = new SimpleDateFormat("MM월 dd일", Locale.KOREA);
+            dateOnly = sdf.format(new Date());
+        }
+        binding.etFuelDate.setText(dateOnly);
+
+        binding.rbStationManual.setChecked(true);
+        binding.etStationManualInput.setVisibility(View.VISIBLE);
+        binding.etStationManualInput.setText(record.getTitle());
+
+        binding.etActualAmount.setText(String.format(Locale.KOREA, "%,d", record.getAmountWon()));
+
+        double parsedLiters = 0.0;
+        if (dateDetail != null && dateDetail.contains("L")) {
+            try {
+                int lIdx = dateDetail.indexOf('·');
+                if (lIdx >= 0) {
+                    String sub = dateDetail.substring(lIdx + 1).replace("L", "").trim();
+                    parsedLiters = Double.parseDouble(sub);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (parsedLiters > 0.0) {
+            binding.etActualLiters.setText(String.format(Locale.KOREA, "%.1f", parsedLiters));
+            long unitPrice = Math.round((double) record.getAmountWon() / parsedLiters);
+            binding.etUnitPrice.setText(String.valueOf(unitPrice));
+        } else {
+            binding.etActualLiters.setText("");
+            binding.etUnitPrice.setText("");
+        }
     }
 
     private void loadCandidateDetails(@NonNull String cId) {
@@ -121,6 +189,9 @@ public class M07FuelConfirmFragment extends Fragment {
         binding.cardAutoDetectedFuel.setVisibility(View.VISIBLE);
         binding.btnRejectFuel.setVisibility(View.VISIBLE);
         binding.btnSaveFuelRecord.setText("확인 저장");
+
+        SimpleDateFormat sdf = new SimpleDateFormat("MM월 dd일", Locale.KOREA);
+        binding.etFuelDate.setText(sdf.format(new Date()));
 
         // 기본 초기값
         binding.textDetectedLiters.setText("20.0 L");
@@ -216,6 +287,49 @@ public class M07FuelConfirmFragment extends Fragment {
         double liters = parseDoubleSafe(binding.etActualLiters.getText().toString());
         String selectedStation = getSelectedStationName();
 
+        String datePrefix = binding.etFuelDate.getText().toString().trim();
+        if (datePrefix.isEmpty()) {
+            SimpleDateFormat sdf = new SimpleDateFormat("MM월 dd일", Locale.KOREA);
+            datePrefix = sdf.format(new Date());
+        }
+        String dateLabel = datePrefix;
+        if (liters > 0) {
+            dateLabel += String.format(Locale.KOREA, " · %.1f L", liters);
+        }
+
+        // 0. 수정 모드인 경우
+        if (MODE_EDIT.equals(mode) && recordId != null) {
+            String vehicleId = existingRecord != null ? existingRecord.getVehicleId() :
+                    (homeRepository.getSelectedVehicle() != null ? homeRepository.getSelectedVehicle().getVehicleId() : "primary_veh");
+
+            ExpenseRecord updatedRecord = new ExpenseRecord(
+                    recordId,
+                    vehicleId,
+                    ExpenseRecord.Category.FUEL,
+                    existingRecord != null ? existingRecord.getOwnership() : ExpenseRecord.Ownership.MY_RECORD,
+                    ExpenseRecord.ConfirmationState.USER_CONFIRMED,
+                    selectedStation,
+                    dateLabel,
+                    amount
+            );
+            homeRepository.addExpenseRecord(updatedRecord);
+
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).updateBottomNavBadges();
+            }
+
+            Snackbar.make(binding.getRoot(),
+                    String.format(Locale.KOREA, "주유 내역(%,d원)이 수정되었습니다.", amount),
+                    Snackbar.LENGTH_SHORT).show();
+
+            binding.getRoot().postDelayed(() -> {
+                if (isAdded()) {
+                    NavHostFragment.findNavController(this).popBackStack();
+                }
+            }, 400);
+            return;
+        }
+
         // 1. 자동 감지 후보인 경우 백엔드 PATCH /mobile/fuel-candidates/{id} CONFIRM 호출
         if (candidateId != null && !candidateId.isEmpty()) {
             Executors.newSingleThreadExecutor().execute(() -> {
@@ -234,12 +348,6 @@ public class M07FuelConfirmFragment extends Fragment {
         String vehicleId = homeRepository.getSelectedVehicle() != null
                 ? homeRepository.getSelectedVehicle().getVehicleId()
                 : "primary_veh";
-
-        SimpleDateFormat sdf = new SimpleDateFormat("MM월 dd일", Locale.KOREA);
-        String dateLabel = sdf.format(new Date());
-        if (liters > 0) {
-            dateLabel += String.format(Locale.KOREA, " · %.1f L", liters);
-        }
 
         ExpenseRecord newRecord = new ExpenseRecord(
                 "fuel_exp_" + UUID.randomUUID(),
@@ -269,6 +377,27 @@ public class M07FuelConfirmFragment extends Fragment {
     }
 
     private void handleReject() {
+        if (MODE_EDIT.equals(mode) && recordId != null) {
+            new MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("주유 내역 삭제")
+                    .setMessage("선택한 주유 내역을 차계부에서 삭제하시겠습니까?")
+                    .setPositiveButton("삭제", (dialog, which) -> {
+                        homeRepository.removeExpenseRecordById(recordId);
+                        if (getActivity() instanceof MainActivity) {
+                            ((MainActivity) getActivity()).updateBottomNavBadges();
+                        }
+                        Snackbar.make(binding.getRoot(), "주유 내역이 삭제되었습니다.", Snackbar.LENGTH_SHORT).show();
+                        binding.getRoot().postDelayed(() -> {
+                            if (isAdded()) {
+                                NavHostFragment.findNavController(this).popBackStack();
+                            }
+                        }, 300);
+                    })
+                    .setNegativeButton("취소", null)
+                    .show();
+            return;
+        }
+
         if (candidateId != null && !candidateId.isEmpty()) {
             Executors.newSingleThreadExecutor().execute(() -> {
                 apiClient.patchFuelCandidate(

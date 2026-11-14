@@ -363,6 +363,28 @@
                         android:textColor="@color/fuelog_text_secondary"
                         android:textSize="12sp" />
 
+                    <!-- 주유 일자 -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="주유 일자"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <EditText
+                        android:id="@+id/et_fuel_date"
+                        android:layout_width="match_parent"
+                        android:layout_height="46dp"
+                        android:layout_marginTop="6dp"
+                        android:background="@drawable/bg_login_input_field"
+                        android:hint="예: 11월 14일"
+                        android:paddingHorizontal="14dp"
+                        android:textColor="@color/fuelog_text_primary"
+                        android:textColorHint="@color/fuelog_text_secondary"
+                        android:textSize="14sp" />
+
                     <!-- 실제 결제 금액 (원) -->
                     <TextView
                         android:layout_width="wrap_content"
