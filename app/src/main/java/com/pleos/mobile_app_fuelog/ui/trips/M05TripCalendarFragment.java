@@ -1,6 +1,8 @@
 package com.pleos.mobile_app_fuelog.ui.trips;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,7 +16,11 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.snackbar.Snackbar;
 import com.pleos.mobile_app_fuelog.data.auth.AuthRepository;
+import com.pleos.mobile_app_fuelog.data.auth.AuthSession;
 import com.pleos.mobile_app_fuelog.data.cache.UserCacheManager;
+import com.pleos.mobile_app_fuelog.data.connection.M04DriverConnectionCoordinator;
+import com.pleos.mobile_app_fuelog.data.home.M03HomeRepository;
+import com.pleos.mobile_app_fuelog.data.home.VehicleProfile;
 import com.pleos.mobile_app_fuelog.data.network.FuelogBackendApiClient;
 import com.pleos.mobile_app_fuelog.databinding.FragmentM05TripCalendarBinding;
 import com.pleos.mobile_app_fuelog.ui.trips.model.CalendarDayItem;
@@ -49,6 +55,16 @@ public class M05TripCalendarFragment extends Fragment {
     private final List<FuelogBackendApiClient.InboxTripSummaryItem> allInboxTrips = new ArrayList<>();
     private CalendarDayItem currentSelectedDay;
 
+    private static final long POLLING_INTERVAL_MS = 10_000L;
+    private final Handler pollHandler = new Handler(Looper.getMainLooper());
+    private final Runnable pollRunnable = new Runnable() {
+        @Override
+        public void run() {
+            pollTripsSilently();
+            pollHandler.postDelayed(this, POLLING_INTERVAL_MS);
+        }
+    };
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -72,33 +88,125 @@ public class M05TripCalendarFragment extends Fragment {
         loadTripsFromBackend();
     }
 
-    private void setupViews() {
-        // 차량명 표시
-        String cachedVehicleName = userCacheManager.getVisibleCachedVehicleName();
-        if (cachedVehicleName != null && !cachedVehicleName.isEmpty()) {
-            binding.textSelectedVehicleLabel.setText(cachedVehicleName);
-        } else {
-            binding.textSelectedVehicleLabel.setText("플레오스 연동 차량");
-        }
+    @Override
+    public void onResume() {
+        super.onResume();
+        updateSelectedVehicleDisplay();
+        pollHandler.removeCallbacks(pollRunnable);
+        pollHandler.postDelayed(pollRunnable, POLLING_INTERVAL_MS);
+    }
 
-        // 이전 달 버튼
+    @Override
+    public void onPause() {
+        super.onPause();
+        pollHandler.removeCallbacks(pollRunnable);
+    }
+
+    private void updateSelectedVehicleDisplay() {
+        if (binding == null) return;
+        VehicleProfile currentVeh = M03HomeRepository.getInstance().getSelectedVehicle();
+        if (currentVeh != null) {
+            binding.textSelectedVehicleLabel.setText(currentVeh.getDisplayName());
+        } else {
+            String cachedVehicleName = userCacheManager.getVisibleCachedVehicleName();
+            if (cachedVehicleName != null && !cachedVehicleName.isEmpty()) {
+                binding.textSelectedVehicleLabel.setText(cachedVehicleName);
+            } else {
+                binding.textSelectedVehicleLabel.setText("플레오스 연동 차량");
+            }
+        }
+    }
+
+    private void setupViews() {
+        updateSelectedVehicleDisplay();
+
+        // 차량 변경 클릭 리스너 (헤더 라벨 및 우측 변경 버튼)
+        binding.btnChangeVehicleM05.setOnClickListener(v -> showVehicleSwitcherDialog());
+        binding.btnSwitchVehicleChip.setOnClickListener(v -> showVehicleSwitcherDialog());
+
+        // 이전 달 버튼 (심플한 좌측 화살표)
         binding.btnPrevMonth.setOnClickListener(v -> {
             currentCalendar.add(Calendar.MONTH, -1);
             buildCalendarGrid();
             distributeTripsToCalendar();
         });
 
-        // 다음 달 버튼
+        // 다음 달 버튼 (심플한 우측 화살표)
         binding.btnNextMonth.setOnClickListener(v -> {
             currentCalendar.add(Calendar.MONTH, 1);
             buildCalendarGrid();
             distributeTripsToCalendar();
         });
+    }
 
-        // 새로고침 버튼
-        binding.btnRefreshTrips.setOnClickListener(v -> {
-            loadTripsFromBackend();
-        });
+    private void showVehicleSwitcherDialog() {
+        M03HomeRepository homeRepository = M03HomeRepository.getInstance();
+        List<VehicleProfile> vehicles = homeRepository.getVehicles();
+        if (vehicles.isEmpty()) {
+            Executors.newSingleThreadExecutor().execute(() -> {
+                List<FuelogBackendApiClient.BackendVehicleItem> backendVehicles = apiClient.fetchMobileVehicles();
+                if (!backendVehicles.isEmpty()) {
+                    for (FuelogBackendApiClient.BackendVehicleItem bv : backendVehicles) {
+                        String vid = bv.vehicleId != null ? bv.vehicleId : bv.id;
+                        userCacheManager.setServerVehicleName(vid, bv.getDisplayName());
+                    }
+                    homeRepository.applyBackendUserVehicles(backendVehicles, userCacheManager::getEffectiveVehicleName);
+                }
+                if (isAdded() && getActivity() != null) {
+                    requireActivity().runOnUiThread(this::showVehicleSwitcherDialog);
+                }
+            });
+            return;
+        }
+
+        List<String> optionList = new ArrayList<>();
+        String currentVid = homeRepository.getSelectedVehicle() != null
+                ? homeRepository.getSelectedVehicle().getVehicleId()
+                : "";
+
+        for (VehicleProfile v : vehicles) {
+            boolean isCurrent = v.getVehicleId().equals(currentVid);
+            String prefix = isCurrent ? "✓ 🚗 " : "   🚗 ";
+            String roleTag = (v.getRole() != null && !v.getRole().isEmpty()) ? "[" + v.getRole() + "] " : "";
+            String pairedTag = v.isPaired() ? " (단말기 연결됨)" : "";
+            optionList.add(prefix + roleTag + v.getDisplayName() + pairedTag);
+        }
+
+        String[] options = optionList.toArray(new String[0]);
+
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("운행 차량 전환 (" + vehicles.size() + "대 등록됨)")
+                .setItems(options, (dialog, which) -> {
+                    if (which < vehicles.size()) {
+                        VehicleProfile selected = vehicles.get(which);
+                        homeRepository.selectVehicle(selected.getVehicleId());
+
+                        AuthSession session = authRepository.getCurrentValidSession();
+                        if (session != null) {
+                            String uid = session.getUserId();
+                            userCacheManager.setRegisteredVehicleForUser(uid, selected.getDisplayName());
+                            userCacheManager.setRegisteredVehicleUuid(uid, selected.getVehicleId());
+                            if (selected.getInstallationId() != null) {
+                                userCacheManager.setInstallationCredentials(
+                                        uid,
+                                        selected.getInstallationId(),
+                                        userCacheManager.getInstallationSecret(uid)
+                                );
+                            }
+                        }
+                        M04DriverConnectionCoordinator.getInstance().setVehicleAlias(selected.getDisplayName());
+
+                        if (binding != null) {
+                            binding.textSelectedVehicleLabel.setText(selected.getDisplayName());
+                        }
+
+                        Snackbar.make(binding.getRoot(), "운행 차량이 변경되었습니다: " + selected.getDisplayName(), Snackbar.LENGTH_SHORT).show();
+
+                        loadTripsFromBackend();
+                    }
+                })
+                .setNegativeButton("취소", null)
+                .show();
     }
 
     private void setupAdapters() {
@@ -211,6 +319,7 @@ public class M05TripCalendarFragment extends Fragment {
             if (!isAdded() || getActivity() == null) return;
 
             requireActivity().runOnUiThread(() -> {
+                if (binding == null) return;
                 binding.progressCalendarLoading.setVisibility(View.GONE);
 
                 if (resp.success && !resp.items.isEmpty()) {
@@ -223,6 +332,27 @@ public class M05TripCalendarFragment extends Fragment {
                             currentCalendar.get(Calendar.MONTH) + 1));
                 }
                 distributeTripsToCalendar();
+            });
+        });
+    }
+
+    /**
+     * 백그라운드 자동 폴링: 로딩 스피너 깜빡임 없이 주기적으로 최신 운행 내역을 반영한다.
+     */
+    private void pollTripsSilently() {
+        Executors.newSingleThreadExecutor().execute(() -> {
+            FuelogBackendApiClient.InboxPageResponse resp =
+                    apiClient.fetchMobileInbox(0L);
+
+            if (!isAdded() || getActivity() == null) return;
+
+            requireActivity().runOnUiThread(() -> {
+                if (binding == null) return;
+                if (resp.success && !resp.items.isEmpty()) {
+                    allInboxTrips.clear();
+                    allInboxTrips.addAll(resp.items);
+                    distributeTripsToCalendar();
+                }
             });
         });
     }
@@ -387,6 +517,7 @@ public class M05TripCalendarFragment extends Fragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        pollHandler.removeCallbacks(pollRunnable);
         binding = null;
     }
 }

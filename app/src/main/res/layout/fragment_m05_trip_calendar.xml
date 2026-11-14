@@ -17,7 +17,7 @@
             android:orientation="vertical"
             android:paddingBottom="80dp">
 
-            <!-- 1. 상단 타이틀 & 차량 & 새로고침 바 -->
+            <!-- 1. 상단 타이틀 & 차량 변경 바 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -41,25 +41,49 @@
                         android:textColor="@color/fuelog_text_primary"
                         android:text="운행 캘린더" />
 
-                    <TextView
-                        android:id="@+id/text_selected_vehicle_label"
+                    <LinearLayout
+                        android:id="@+id/btn_change_vehicle_m05"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:textSize="13sp"
-                        android:textColor="@color/fuelog_text_secondary"
-                        android:text="플레오스 연동 차량" />
+                        android:layout_marginTop="3dp"
+                        android:gravity="center_vertical"
+                        android:background="?attr/selectableItemBackground"
+                        android:paddingVertical="2dp"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/text_selected_vehicle_label"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textSize="13sp"
+                            android:textColor="@color/fuelog_text_secondary"
+                            android:text="플레오스 연동 차량" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:textSize="10sp"
+                            android:textColor="@color/fuelog_text_secondary"
+                            android:text="▼" />
+
+                    </LinearLayout>
 
                 </LinearLayout>
 
-                <ImageButton
-                    android:id="@+id/btn_refresh_trips"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@android:drawable/ic_popup_sync"
-                    app:tint="@color/fuelog_text_secondary"
-                    android:contentDescription="새로고침" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_switch_vehicle_chip"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="차량 변경"
+                    android:textSize="12sp"
+                    android:textColor="@color/fuelog_text_primary"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="0dp"
+                    app:strokeColor="@color/fuelog_border"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="18dp" />
 
             </LinearLayout>
 
@@ -74,10 +98,10 @@
 
                 <ImageButton
                     android:id="@+id/btn_prev_month"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@android:drawable/ic_media_previous"
+                    android:src="@drawable/ic_chevron_left"
                     app:tint="@color/fuelog_text_primary"
                     android:contentDescription="이전 달" />
 
@@ -93,10 +117,10 @@
 
                 <ImageButton
                     android:id="@+id/btn_next_month"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@android:drawable/ic_media_next"
+                    android:src="@drawable/ic_chevron_right"
                     app:tint="@color/fuelog_text_primary"
                     android:contentDescription="다음 달" />
 
